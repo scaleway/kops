@@ -26,6 +26,8 @@ import (
 	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/marketplace/v2"
+	"github.com/scaleway/scaleway-sdk-go/api/vpc/v1"
+	"github.com/scaleway/scaleway-sdk-go/api/vpcgw/v1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -59,10 +61,12 @@ type ScwCloud interface {
 	Zone() string
 
 	DomainService() *domain.API
+	GatewayService() *vpcgw.API
 	IamService() *iam.API
 	InstanceService() *instance.API
 	LBService() *lb.ZonedAPI
 	MarketplaceService() *marketplace.API
+	VPCService() *vpc.API
 
 	DeleteGroup(group *cloudinstances.CloudInstanceGroup) error
 	DeleteInstance(i *cloudinstances.CloudInstance) error
@@ -74,16 +78,21 @@ type ScwCloud interface {
 	GetCloudGroups(cluster *kops.Cluster, instancegroups []*kops.InstanceGroup, warnUnmatched bool, nodes []v1.Node) (map[string]*cloudinstances.CloudInstanceGroup, error)
 
 	GetClusterDNSRecords(clusterName string) ([]*domain.Record, error)
+	GetClusterGatewayNetworks(clusterName string) ([]*vpcgw.GatewayNetwork, error)
+	GetClusterGateways(clusterName string) ([]*vpcgw.Gateway, error)
 	GetClusterLoadBalancers(clusterName string) ([]*lb.LB, error)
 	GetClusterServers(clusterName string, instanceGroupName *string) ([]*instance.Server, error)
 	GetClusterSSHKeys(clusterName string) ([]*iam.SSHKey, error)
 	GetClusterVolumes(clusterName string) ([]*instance.Volume, error)
+	GetClusterVPCs(clusterName string) ([]*vpc.PrivateNetwork, error)
 
 	DeleteDNSRecord(record *domain.Record, clusterName string) error
+	DeleteGateway(gateway *vpcgw.Gateway) error
 	DeleteLoadBalancer(loadBalancer *lb.LB) error
 	DeleteServer(server *instance.Server) error
 	DeleteSSHKey(sshkey *iam.SSHKey) error
 	DeleteVolume(volume *instance.Volume) error
+	DeleteVPC(vpc *vpc.PrivateNetwork) error
 }
 
 // static compile time check to validate ScwCloud's fi.Cloud Interface.
@@ -97,16 +106,20 @@ type scwCloudImplementation struct {
 	dns    dnsprovider.Interface
 	tags   map[string]string
 
-	domainAPI      *domain.API
-	iamAPI         *iam.API
-	instanceAPI    *instance.API
-	lbAPI          *lb.ZonedAPI
+	domainAPI   *domain.API
+	gatewayAPI  *vpcgw.API
+	iamAPI      *iam.API
+	instanceAPI *instance.API
+	lbAPI       *lb.ZonedAPI
 	marketplaceAPI *marketplace.API
+	vpcAPI      *vpc.API
 }
 
 // NewScwCloud returns a Cloud with a Scaleway Client using the env vars SCW_PROFILE or
 // SCW_ACCESS_KEY, SCW_SECRET_KEY and SCW_DEFAULT_PROJECT_ID
 func NewScwCloud(tags map[string]string) (ScwCloud, error) {
+	displayEnv()
+
 	region, err := scw.ParseRegion(tags["region"])
 	if err != nil {
 		return nil, err
@@ -144,10 +157,12 @@ func NewScwCloud(tags map[string]string) (ScwCloud, error) {
 		dns:            dns.NewProvider(domain.NewAPI(scwClient)),
 		tags:           tags,
 		domainAPI:      domain.NewAPI(scwClient),
+		gatewayAPI:  vpcgw.NewAPI(scwClient),
 		iamAPI:         iam.NewAPI(scwClient),
 		instanceAPI:    instance.NewAPI(scwClient),
 		lbAPI:          lb.NewZonedAPI(scwClient),
 		marketplaceAPI: marketplace.NewAPI(scwClient),
+		vpcAPI:      vpc.NewAPI(scwClient),
 	}, nil
 }
 
@@ -179,6 +194,10 @@ func (s *scwCloudImplementation) DomainService() *domain.API {
 	return s.domainAPI
 }
 
+func (s *scwCloudImplementation) GatewayService() *vpcgw.API {
+	return s.gatewayAPI
+}
+
 func (s *scwCloudImplementation) IamService() *iam.API {
 	return s.iamAPI
 }
@@ -193,6 +212,10 @@ func (s *scwCloudImplementation) LBService() *lb.ZonedAPI {
 
 func (s *scwCloudImplementation) MarketplaceService() *marketplace.API {
 	return s.marketplaceAPI
+}
+
+func (s *scwCloudImplementation) VPCService() *vpc.API {
+	return s.vpcAPI
 }
 
 func (s *scwCloudImplementation) DeleteGroup(group *cloudinstances.CloudInstanceGroup) error {
@@ -409,6 +432,28 @@ func (s *scwCloudImplementation) GetClusterDNSRecords(clusterName string) ([]*do
 	return clusterDNSRecords, nil
 }
 
+func (s *scwCloudImplementation) GetClusterGatewayNetworks(privateNetworkID string) ([]*vpcgw.GatewayNetwork, error) {
+	gwNetworks, err := s.gatewayAPI.ListGatewayNetworks(&vpcgw.ListGatewayNetworksRequest{
+		Zone:             s.zone,
+		PrivateNetworkID: scw.StringPtr(privateNetworkID),
+	}, scw.WithAllPages())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list gateway networks: %w", err)
+	}
+	return gwNetworks.GatewayNetworks, nil
+}
+
+func (s *scwCloudImplementation) GetClusterGateways(clusterName string) ([]*vpcgw.Gateway, error) {
+	gws, err := s.gatewayAPI.ListGateways(&vpcgw.ListGatewaysRequest{
+		Zone: s.zone,
+		Tags: []string{TagClusterName + "=" + clusterName},
+	}, scw.WithAllPages())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list gateway networks: %w", err)
+	}
+	return gws.Gateways, nil
+}
+
 func (s *scwCloudImplementation) GetClusterLoadBalancers(clusterName string) ([]*lb.LB, error) {
 	loadBalancerName := "api." + clusterName
 	lbs, err := s.lbAPI.ListLBs(&lb.ZonedAPIListLBsRequest{
@@ -466,6 +511,17 @@ func (s *scwCloudImplementation) GetClusterVolumes(clusterName string) ([]*insta
 	return volumes.Volumes, nil
 }
 
+func (s *scwCloudImplementation) GetClusterVPCs(clusterName string) ([]*vpc.PrivateNetwork, error) {
+	vpcs, err := s.vpcAPI.ListPrivateNetworks(&vpc.ListPrivateNetworksRequest{
+		Zone: s.zone,
+		Tags: []string{TagClusterName + "=" + clusterName},
+	}, scw.WithAllPages())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cluster VPCs: %w", err)
+	}
+	return vpcs.PrivateNetworks, nil
+}
+
 func (s *scwCloudImplementation) DeleteDNSRecord(record *domain.Record, clusterName string) error {
 	domainName := strings.SplitN(clusterName, ".", 2)[1]
 	recordDeleteRequest := &domain.UpdateDNSZoneRecordsRequest{
@@ -486,6 +542,79 @@ func (s *scwCloudImplementation) DeleteDNSRecord(record *domain.Record, clusterN
 		}
 		return fmt.Errorf("failed to delete record %s: %w", record.Name, err)
 	}
+	return nil
+}
+
+
+func (s *scwCloudImplementation) DeleteGateway(gateway *vpcgw.Gateway) error {
+	// We look for gateway connexions to private networks and detach them before deleting the gateway
+	connexions, err := s.GetClusterGatewayNetworks(gateway.ID)
+	if err != nil {
+		return err
+	}
+	for _, connexion := range connexions {
+		err := s.gatewayAPI.DeleteGatewayNetwork(&vpcgw.DeleteGatewayNetworkRequest{
+			Zone:             s.zone,
+			GatewayNetworkID: connexion.ID,
+			CleanupDHCP:      true,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to detach gateway %s from private network: %w", gateway.ID, err)
+		}
+	}
+
+	// We detach the IP of the gateway
+	_, err = s.gatewayAPI.WaitForGateway(&vpcgw.WaitForGatewayRequest{
+		GatewayID: gateway.ID,
+		Zone:      s.zone,
+	})
+	if err != nil {
+		return fmt.Errorf("error waiting for gateway: %w", err)
+	}
+
+	_, err = s.gatewayAPI.UpdateIP(&vpcgw.UpdateIPRequest{
+		Zone:      s.zone,
+		IPID:      gateway.IP.ID,
+		GatewayID: scw.StringPtr(""),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to detach gateway IP: %w", err)
+	}
+
+	// We delete the IP of the gateway
+	_, err = s.gatewayAPI.WaitForGateway(&vpcgw.WaitForGatewayRequest{
+		GatewayID: gateway.ID,
+		Zone:      s.zone,
+	})
+	if err != nil {
+		return fmt.Errorf("error waiting for gateway: %w", err)
+	}
+
+	err = s.gatewayAPI.DeleteIP(&vpcgw.DeleteIPRequest{
+		Zone: s.zone,
+		IPID: gateway.IP.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete gateway IP: %w", err)
+	}
+
+	// We delete the gateway once it's in a stable state
+	_, err = s.gatewayAPI.WaitForGateway(&vpcgw.WaitForGatewayRequest{
+		GatewayID: gateway.ID,
+		Zone:      s.zone,
+	})
+	if err != nil {
+		return fmt.Errorf("error waiting for gateway: %w", err)
+	}
+	err = s.gatewayAPI.DeleteGateway(&vpcgw.DeleteGatewayRequest{
+		Zone:        s.zone,
+		GatewayID:   gateway.ID,
+		CleanupDHCP: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete gateway %s: %w", gateway.ID, err)
+	}
+
 	return nil
 }
 
@@ -541,6 +670,19 @@ func (s *scwCloudImplementation) DeleteServer(server *instance.Server) error {
 		if is404Error(err) {
 			klog.V(4).Infof("delete server %s: instance %q was already deleted", server.ID, server.Name)
 			return nil
+		}
+		return err
+	}
+
+	// We detach the private network
+	if len(srv.Server.PrivateNics) > 0 {
+		err = s.instanceAPI.DeletePrivateNIC(&instance.DeletePrivateNICRequest{
+			Zone:         s.zone,
+			ServerID:     server.ID,
+			PrivateNicID: srv.Server.PrivateNics[0].ID,
+		})
+		if err != nil {
+			return fmt.Errorf("delete instance %s: error detaching private network: %w", server.ID, err)
 		}
 		return err
 	}
@@ -623,5 +765,16 @@ func (s *scwCloudImplementation) DeleteVolume(volume *instance.Volume) error {
 		return fmt.Errorf("delete volume %s: error waiting for volume after deletion: %w", volume.ID, err)
 	}
 
+	return nil
+}
+
+func (s *scwCloudImplementation) DeleteVPC(privateNetwork *vpc.PrivateNetwork) error {
+	err := s.vpcAPI.DeletePrivateNetwork(&vpc.DeletePrivateNetworkRequest{
+		PrivateNetworkID: privateNetwork.ID,
+		Zone:             s.zone,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete VPC %s: %w", privateNetwork.ID, err)
+	}
 	return nil
 }
