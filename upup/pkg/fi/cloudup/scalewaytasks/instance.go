@@ -51,6 +51,7 @@ type Instance struct {
 	UserData     *fi.Resource
 	LoadBalancer *LoadBalancer
 	//Network        *Network
+	NeedsUpdate []string
 }
 
 var _ fi.CloudupTask = &Instance{}
@@ -217,6 +218,7 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 
 	}
 
+	// We get the private network to associate it with new instances
 	//pn, err := cloud.GetClusterVPCs(c.Cluster.Name)
 	//if err != nil {
 	//	return fmt.Errorf("error listing private networks: %v", err)
@@ -410,12 +412,11 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 		}
 	}
 
+	// We create NAT rules linking the gateway to our instances in order to be able to connect via SSH
+	// TODO(Mia-Cross): This part is for dev purposes only, remove when done
 	//gwService := cloud.GatewayService()
 	//rules := []*vpcgw.SetPATRulesRequestRule(nil)
 	//port := uint32(2022)
-
-	// We create NAT rules linking the gateway to our instances in order to be able to connect via SSH
-	//// TODO(Mia-Cross): This part is for dev purposes only, remove when done
 	//gwNetwork, err := cloud.GetClusterGatewayNetworks(pn[0].ID)
 	//if err != nil {
 	//	return err

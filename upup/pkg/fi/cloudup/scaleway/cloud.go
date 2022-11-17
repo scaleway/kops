@@ -48,6 +48,7 @@ const (
 	TagRoleControlPlane      = "ControlPlane"
 	TagRoleWorker            = "Node"
 	KopsUserAgentPrefix      = "kubernetes-kops/"
+	TagNeedsUpdate           = "noprefix=kops.k8s.io/needs-update"
 )
 
 // ScwCloud exposes all the interfaces required to operate on Scaleway resources
@@ -218,6 +219,7 @@ func (s *scwCloudImplementation) VPCService() *vpc.API {
 	return s.vpcAPI
 }
 
+// DeleteGroup deletes the cloud resources that make up a CloudInstanceGroup, including the instances.
 func (s *scwCloudImplementation) DeleteGroup(group *cloudinstances.CloudInstanceGroup) error {
 	toDelete := append(group.NeedUpdate, group.Ready...)
 	for _, cloudInstance := range toDelete {
