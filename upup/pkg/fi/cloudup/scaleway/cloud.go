@@ -552,7 +552,11 @@ func (s *scwCloudImplementation) DeleteGateway(gateway *vpcgw.Gateway) error {
 	// We look for gateway connexions to private networks and detach them before deleting the gateway
 	connexions, err := s.GetClusterGatewayNetworks(gateway.ID)
 	if err != nil {
-		return err
+		if is404Error(err) {
+			klog.V(8).Infof("Gateway %q (%s) was already deleted", gateway.Name, gateway.ID)
+			return nil
+		}
+		return fmt.Errorf("error listing gateway networks: %w", err)
 	}
 	for _, connexion := range connexions {
 		err := s.gatewayAPI.DeleteGatewayNetwork(&vpcgw.DeleteGatewayNetworkRequest{
@@ -571,6 +575,10 @@ func (s *scwCloudImplementation) DeleteGateway(gateway *vpcgw.Gateway) error {
 		Zone:      s.zone,
 	})
 	if err != nil {
+		if is404Error(err) {
+			klog.V(8).Infof("Gateway %q (%s) was already deleted", gateway.Name, gateway.ID)
+			return nil
+		}
 		return fmt.Errorf("error waiting for gateway: %w", err)
 	}
 
@@ -776,6 +784,10 @@ func (s *scwCloudImplementation) DeleteVPC(privateNetwork *vpc.PrivateNetwork) e
 		Zone:             s.zone,
 	})
 	if err != nil {
+		if is404Error(err) {
+			klog.V(8).Infof("Private network %q (%s) was already deleted", privateNetwork.Name, privateNetwork.ID)
+			return nil
+		}
 		return fmt.Errorf("failed to delete VPC %s: %w", privateNetwork.ID, err)
 	}
 	return nil
