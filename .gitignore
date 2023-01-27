@@ -98,3 +98,4 @@ _rundir
 s3:
 zzzs3-state-store
 .run/
+./data
