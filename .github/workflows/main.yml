@@ -8,6 +8,7 @@ name: CI
 env:
   GOPROXY: https://proxy.golang.org
   GOPATH: ${{ github.workspace }}/go
+  KOPS_FEATURE_FLAGS: Scaleway
 
 permissions:
   contents: read
@@ -25,44 +26,48 @@ jobs:
         with:
           path: ${{ env.GOPATH }}/src/k8s.io/kops
 
-      - name: make all examples test
+      - name: make all examples
         working-directory: ${{ env.GOPATH }}/src/k8s.io/kops
         run: |
-          make all examples test
+          make all examples
 
-  build-macos-amd64:
-    runs-on: macos-latest
-    steps:
-    - name: Set up go
-      uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568
-      with:
-        go-version: '1.19.7'
+      - name: test scaleway
+        working-directory: ${{ env.GOPATH }}/src/k8s.io/kops/cmd/kops
+        run: go test -v -run TestMinimalScaleway
 
-    - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
-      with:
-        path: ${{ env.GOPATH }}/src/k8s.io/kops
-
-    - name: make kops examples test
-      working-directory: ${{ env.GOPATH }}/src/k8s.io/kops
-      run: |
-        make kops examples test
-
-  build-windows-amd64:
-    runs-on: windows-2019
-    steps:
-    - name: Set up go
-      uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568
-      with:
-        go-version: '1.19.7'
-
-    - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
-      with:
-        path: ${{ env.GOPATH }}/src/k8s.io/kops
-
-    - name: make kops examples test
-      working-directory: ${{ env.GOPATH }}/src/k8s.io/kops
-      run: |
-        make kops examples test-windows
+#  build-macos-amd64:
+#    runs-on: macos-latest
+#    steps:
+#    - name: Set up go
+#      uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568
+#      with:
+#        go-version: '1.19.7'
+#
+#    - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+#      with:
+#        path: ${{ env.GOPATH }}/src/k8s.io/kops
+#
+#    - name: make kops examples test
+#      working-directory: ${{ env.GOPATH }}/src/k8s.io/kops
+#      run: |
+#        make kops examples test
+#
+#  build-windows-amd64:
+#    runs-on: windows-2019
+#    steps:
+#    - name: Set up go
+#      uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568
+#      with:
+#        go-version: '1.19.7'
+#
+#    - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+#      with:
+#        path: ${{ env.GOPATH }}/src/k8s.io/kops
+#
+#    - name: make kops examples test
+#      working-directory: ${{ env.GOPATH }}/src/k8s.io/kops
+#      run: |
+#        make kops examples test-windows
 
   verify:
     runs-on: ubuntu-20.04

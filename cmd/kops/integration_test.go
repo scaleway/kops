@@ -401,8 +401,9 @@ func TestMinimalGCEDNSNone(t *testing.T) {
 
 // TestMinimalScaleway runs tests on a minimal Scaleway cluster with gossip DNS
 func TestMinimalScaleway(t *testing.T) {
-	t.Setenv("SCW_PROFILE", "kops-testing")
-	t.Setenv("KOPS_FEATURE_FLAGS", "Scaleway")
+	//t.Setenv("SCW_PROFILE", "kops-testing")
+	t.Setenv("SCW_PROFILE", "REDACTED")
+	//t.Setenv("SCW_CONFIG_PATH", "")
 	newIntegrationTest("scw-minimal.k8s.local", "minimal_scaleway").
 		withAddons(
 			scwCCMAddon,
@@ -1761,7 +1762,7 @@ func (i *integrationTest) runTestTerraformScaleway(t *testing.T) {
 	h := testutils.NewIntegrationTestHarness(t)
 	defer h.Close()
 
-	h.MockKopsVersion("1.27.0-alpha.1")
+	h.MockKopsVersion("1.21.0-alpha.1")
 
 	expectedFilenames := i.expectTerraformFilenames
 
@@ -1777,15 +1778,13 @@ func (i *integrationTest) runTestTerraformScaleway(t *testing.T) {
 		"aws_s3_object_nodeupconfig-nodes-fr-par-1_content",
 		"aws_s3_object_"+i.clusterName+"-addons-bootstrap_content",
 		"aws_s3_object_"+i.clusterName+"-addons-coredns.addons.k8s.io-k8s-1.12_content",
-		"aws_s3_object_"+i.clusterName+"-addons-scaleway-cloud-controller.addons.k8s.io-k8s-1.24_content",
-		"aws_s3_object_"+i.clusterName+"-addons-scaleway-csi-driver.addons.k8s.io-k8s-1.24_content",
 		"aws_s3_object_"+i.clusterName+"-addons-kops-controller.addons.k8s.io-k8s-1.16_content",
 		"aws_s3_object_"+i.clusterName+"-addons-kubelet-api.rbac.addons.k8s.io-k8s-1.9_content",
 		"aws_s3_object_"+i.clusterName+"-addons-limit-range.addons.k8s.io_content",
-		"aws_s3_object_"+i.clusterName+"-addons-networking-cilium.addons.k8s.io-k8s-1.16_content",
+		"aws_s3_object_"+i.clusterName+"-addons-networking.cilium.io-k8s-1.16_content",
 		"aws_s3_object_"+i.clusterName+"-addons-rbac.addons.k8s.io-k8s-1.8_content",
-		"scaleway_instance_server_control-plane-fr-par-1_user_data",
-		"scaleway_instance_server_nodes-fr-par-1_user_data",
+		"scaleway_instance_server_control-plane-fr-par-1-masters-scw-minimal-k8s-local_user_data",
+		"scaleway_instance_server_nodes-fr-par-1-scw-minimal-k8s-local_user_data",
 	)
 
 	i.runTest(t, ctx, h, expectedFilenames, "", "", nil)

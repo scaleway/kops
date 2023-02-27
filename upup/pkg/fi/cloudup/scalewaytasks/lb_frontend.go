@@ -18,11 +18,14 @@ package scalewaytasks
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
+	"k8s.io/kops/upup/pkg/fi/cloudup/terraform"
+	"k8s.io/kops/upup/pkg/fi/cloudup/terraformWriter"
 )
 
 // +kops:fitask
@@ -124,10 +127,10 @@ func (l *LBFrontend) RenderScw(t *scaleway.ScwAPITarget, actual, expected, chang
 
 		frontendCreated, err := lbService.CreateFrontend(&lb.ZonedAPICreateFrontendRequest{
 			Zone:        scw.Zone(fi.ValueOf(expected.Zone)),
-			LBID:        fi.ValueOf(expected.LoadBalancer.LBID), // try expected instead of l
+			LBID:        fi.ValueOf(expected.LoadBalancer.LBID),
 			Name:        fi.ValueOf(expected.Name),
 			InboundPort: fi.ValueOf(expected.InboundPort),
-			BackendID:   fi.ValueOf(expected.LBBackend.ID), // try expected instead of l
+			BackendID:   fi.ValueOf(expected.LBBackend.ID),
 		})
 		if err != nil {
 			return fmt.Errorf("creating front-end for load-balancer %s: %w", fi.ValueOf(expected.LoadBalancer.Name), err)
@@ -146,4 +149,30 @@ func (l *LBFrontend) RenderScw(t *scaleway.ScwAPITarget, actual, expected, chang
 	}
 
 	return nil
+}
+
+type terraformLBFrontend struct {
+	BackendID   *terraformWriter.Literal `cty:"backend_id"`
+	LBID        *terraformWriter.Literal `cty:"lb_id"`
+	Name        *string                  `cty:"name"`
+	InboundPort *int32                   `cty:"inbound_port"`
+}
+
+func (_ *LBFrontend) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *LBFrontend) error {
+	tfName := strings.Replace(fi.ValueOf(expected.LoadBalancer.Name), ".", "-", -1)
+	tf := terraformLBFrontend{
+		LBID:        expected.TerraformLinkLBID(tfName),
+		BackendID:   expected.TerraformLinkBackendID(tfName),
+		Name:        expected.Name,
+		InboundPort: expected.InboundPort,
+	}
+	return t.RenderResource("scaleway_lb_frontend", tfName, tf)
+}
+
+func (l *LBFrontend) TerraformLinkLBID(tfName string) *terraformWriter.Literal {
+	return terraformWriter.LiteralProperty("scaleway_lb", tfName, "id")
+}
+
+func (l *LBFrontend) TerraformLinkBackendID(tfName string) *terraformWriter.Literal {
+	return terraformWriter.LiteralProperty("scaleway_lb_backend", tfName, "id")
 }

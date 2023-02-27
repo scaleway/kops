@@ -74,7 +74,7 @@ kops create cluster [CLUSTER] [flags]
       --bastion                                 Enable a bastion instance group. Only applies to private topology.
       --bastion-image string                    Machine image for bastions. Takes precedence over --image
       --channel string                          Channel for default versions and configuration to use (default "stable")
-      --cloud string                            Cloud provider to use - aws, digitalocean, gce, hetzner, openstack
+      --cloud string                            Cloud provider to use - aws, digitalocean, gce, hetzner, openstack, scaleway
       --cloud-labels string                     A list of key/value pairs used to tag all instance groups (for example "Owner=John Doe,Team=Some Team").
       --container-runtime string                Container runtime to use: containerd, docker
       --control-plane-count int32               Number of control-plane nodes. Defaults to one control-plane node per control-plane-zone
