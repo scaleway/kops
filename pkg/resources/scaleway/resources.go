@@ -25,7 +25,6 @@ import (
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/vpc/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/vpcgw/v1"
-	"github.com/scaleway/scaleway-sdk-go/scw"
 	"k8s.io/kops/pkg/resources"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"

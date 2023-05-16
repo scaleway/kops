@@ -547,7 +547,6 @@ func (s *scwCloudImplementation) DeleteDNSRecord(record *domain.Record, clusterN
 	return nil
 }
 
-
 func (s *scwCloudImplementation) DeleteGateway(gateway *vpcgw.Gateway) error {
 	// We look for gateway connexions to private networks and detach them before deleting the gateway
 	connexions, err := s.GetClusterGatewayNetworks(gateway.ID)
