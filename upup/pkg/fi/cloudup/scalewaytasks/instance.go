@@ -370,6 +370,13 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 		}
 
 		for _, loadBalancer := range lbs {
+			//if backEnds.TotalCount > 1 {
+			//	return fmt.Errorf("cannot have multiple back-ends for load-balancer %s", loadBalancer.Name)
+			//} else if backEnds.TotalCount < 1 {
+			//	return fmt.Errorf("load-balancer %s should have 1 back-end, got 0", loadBalancer.Name)
+			//}
+			//backEnd := backEnds.Backends[0]
+
 			backEnds, err := lbService.ListBackends(&lb.ZonedAPIListBackendsRequest{
 				Zone: zone,
 				LBID: loadBalancer.ID,

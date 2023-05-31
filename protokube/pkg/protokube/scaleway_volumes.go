@@ -76,7 +76,7 @@ func NewScwCloudProvider() (*ScwCloudProvider, error) {
 		scw.WithDefaultRegion(region),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error creating client for Protokube: %w", err)
+		return nil, fmt.Errorf("creating client for Protokube: %w", err)
 	}
 
 	instanceAPI := instance.NewAPI(scwClient)

@@ -180,7 +180,7 @@ resource "scaleway_instance_server" "control-plane-fr-par-1" {
   ip_id = scaleway_instance_ip.control-plane-fr-par-1.id
   name  = "control-plane-fr-par-1"
   tags  = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=control-plane-fr-par-1", "noprefix=kops.k8s.io/role=ControlPlane"]
-  type  = "DEV1-M"
+  type  = "PLAY2-NANO"
   user_data = {
     "cloud-init" = filebase64("${path.module}/data/scaleway_instance_server_control-plane-fr-par-1_user_data")
   }
@@ -191,7 +191,7 @@ resource "scaleway_instance_server" "nodes-fr-par-1" {
   ip_id = scaleway_instance_ip.nodes-fr-par-1.id
   name  = "nodes-fr-par-1"
   tags  = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=nodes-fr-par-1"]
-  type  = "DEV1-M"
+  type  = "PLAY2-NANO"
   user_data = {
     "cloud-init" = filebase64("${path.module}/data/scaleway_instance_server_nodes-fr-par-1_user_data")
   }
