@@ -46,12 +46,12 @@ type Instance struct {
 	Image          *string
 	Tags           []string
 	Count          int
+	VolumeSize     *int
 	NeedsUpdate    []string
 
 	UserData     *fi.Resource
 	LoadBalancer *LoadBalancer
 	//Network        *Network
-	NeedsUpdate []string
 }
 
 var _ fi.CloudupTask = &Instance{}
@@ -236,20 +236,14 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 		}
 		uniqueName := fmt.Sprintf("%s-%d", fi.ValueOf(expected.Name), i+actualCount)
 
-		// If the instance's commercial type is one that has no local storage, we have to specify for the
-		// block storage volume a big enough size (default size is 10GB)
-		commercialType := fi.ValueOf(expected.CommercialType)
 		createServerRequest := instance.CreateServerRequest{
 			Zone:           zone,
 			Name:           uniqueName,
-			CommercialType: commercialType,
+			CommercialType: fi.ValueOf(expected.CommercialType),
 			Image:          fi.ValueOf(expected.Image),
 			Tags:           expected.Tags,
 		}
-		for _, ct := range commercialTypesWithBlockStorageOnly {
-			if strings.HasPrefix(commercialType, ct) {
-				continue
-			}
+		if expected.VolumeSize != nil {
 			createServerRequest.Volumes = map[string]*instance.VolumeServerTemplate{
 				"0": {
 					Boot:       fi.PtrTo(true),
@@ -466,12 +460,14 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 type terraformInstanceIP struct{}
 
 type terraformInstance struct {
-	Name     *string                             `cty:"name"`
-	IPID     *terraformWriter.Literal            `cty:"ip_id"`
-	Type     *string                             `cty:"type"`
-	Tags     []string                            `cty:"tags"`
-	Image    *string                             `cty:"image"`
-	UserData map[string]*terraformWriter.Literal `cty:"user_data"`
+	Name       *string                             `cty:"name"`
+	IPID       *terraformWriter.Literal            `cty:"ip_id"`
+	Type       *string                             `cty:"type"`
+	Tags       []string                            `cty:"tags"`
+	Image      *string                             `cty:"image"`
+	UserData   map[string]*terraformWriter.Literal `cty:"user_data"`
+	RootVolume []terraformVolume                   `cty:"root_volume"`
+	PrivateIP  *string                             `cty:"private_ip"`
 }
 
 func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *Instance) error {
@@ -496,15 +492,27 @@ func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expecte
 			return err
 		}
 		if userDataBytes != nil {
-			tfUserData, err := t.AddFileBytes("scaleway_instance_server", tfName, "user_data", userDataBytes, true)
+			tfUserData, err := t.AddFileBytes("scaleway_instance_server", tfName, "user_data", userDataBytes, false)
 			if err != nil {
 				return err
 			}
 			tfInstance.UserData = map[string]*terraformWriter.Literal{
-				"cloud-init": tfUserData}
+				"cloud-init": tfUserData,
+			}
+		}
+	}
+	if expected.VolumeSize != nil {
+		tfInstance.RootVolume = []terraformVolume{
+			{
+				SizeInGB: expected.VolumeSize,
+			},
 		}
 	}
 	return t.RenderResource("scaleway_instance_server", tfName, tfInstance)
+}
+
+func (i *Instance) TerraformLinkIP() *terraformWriter.Literal {
+	return terraformWriter.LiteralProperty("scaleway_instance_server", fi.ValueOf(i.Name), "private_ip")
 }
 
 func checkImageDifferences(c *fi.CloudupContext, cloud scaleway.ScwCloud, actualServer *instance.Server, expectedImage string) (bool, error) {

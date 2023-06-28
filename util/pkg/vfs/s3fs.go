@@ -641,7 +641,7 @@ type terraformDOFile struct {
 type terraformScwFile struct {
 	Bucket  string                   `json:"bucket" cty:"bucket"`
 	Key     string                   `json:"key" cty:"key"`
-	Content *terraformWriter.Literal `json:"content" cty:"content"`
+	Content *terraformWriter.Literal `json:"content,omitempty" cty:"content"`
 }
 
 func (p *S3Path) RenderTerraform(w *terraformWriter.TerraformWriter, name string, data io.Reader, acl ACL) error {

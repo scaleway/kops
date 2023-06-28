@@ -353,6 +353,38 @@ func (r *resourceRecordChangeset) Apply(ctx context.Context) error {
 		return err
 	}
 
+	if len(r.upserts) > 0 {
+		for _, rrset := range r.upserts {
+			for _, rrdata := range rrset.Rrdatas() {
+				found := false
+				for _, record := range records {
+					recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, r.zone.Name())
+					klog.Infof("COMPARING [%s][%s]\tTYPES = %s|%s", recordNameWithZone, dns.EnsureDotSuffix(rrset.Name()), rrset.Type(), rrstype.RrsType(record.Type))
+					if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && rrset.Type() == rrstype.RrsType(record.Type) {
+						found = true
+						klog.Infof("changing DNS record %q of zone %q", record.Name, r.zone.Name())
+						updateRecordsRequest = append(updateRecordsRequest, &domain.RecordChange{
+							Set: &domain.RecordChangeSet{
+								ID: &record.ID,
+								Records: []*domain.Record{
+									{
+										Name: record.Name,
+										Data: rrdata,
+										TTL:  uint32(rrset.Ttl()),
+										Type: domain.RecordType(rrset.Type()),
+									},
+								},
+							},
+						})
+					}
+				}
+				if found == false {
+					r.additions = append(r.additions, rrset)
+				}
+			}
+		}
+	}
+
 	if len(r.additions) > 0 {
 		recordsToAdd := []*domain.Record(nil)
 		for _, rrset := range r.additions {
@@ -372,32 +404,6 @@ func (r *resourceRecordChangeset) Apply(ctx context.Context) error {
 					Records: recordsToAdd,
 				},
 			})
-		}
-	}
-
-	if len(r.upserts) > 0 {
-		for _, rrset := range r.upserts {
-			for _, rrdata := range rrset.Rrdatas() {
-				for _, record := range records {
-					recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, r.zone.Name())
-					if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && rrset.Type() == rrstype.RrsType(record.Type) {
-						klog.V(8).Infof("changing DNS record %q of zone %q", record.Name, r.zone.Name())
-						updateRecordsRequest = append(updateRecordsRequest, &domain.RecordChange{
-							Set: &domain.RecordChangeSet{
-								ID: &record.ID,
-								Records: []*domain.Record{
-									{
-										Name: record.Name,
-										Data: rrdata,
-										TTL:  uint32(rrset.Ttl()),
-										Type: domain.RecordType(rrset.Type()),
-									},
-								},
-							},
-						})
-					}
-				}
-			}
 		}
 	}
 
