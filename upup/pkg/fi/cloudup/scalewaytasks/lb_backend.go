@@ -42,8 +42,7 @@ type LBBackend struct {
 	StickySessions       *string
 	ProxyProtocol        *string
 
-	LoadBalancer  *LoadBalancer
-	ControlPlanes []*Instance
+	LoadBalancer *LoadBalancer
 }
 
 var _ fi.CloudupTask = &LBBackend{}
@@ -155,16 +154,18 @@ func (l *LBBackend) RenderScw(t *scaleway.ScwAPITarget, actual, expected, change
 		if err != nil {
 			return fmt.Errorf("updating back-end for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
 		}
-		if changes.ControlPlanes != nil {
-			_, err = lbService.SetBackendServers(&lb.ZonedAPISetBackendServersRequest{
-				Zone:      zone,
-				BackendID: fi.ValueOf(actual.ID),
-				ServerIP:  controlPlanesIPs,
-			})
-			if err != nil {
-				return fmt.Errorf("updating back-end server IPs for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
-			}
-		}
+
+		//TODO(Mia-Cross): find a way to detect changes to control-planes IPs
+		//if changes.ControlPlanes != nil {
+		//	_, err = lbService.SetBackendServers(&lb.ZonedAPISetBackendServersRequest{
+		//		Zone:      zone,
+		//		BackendID: fi.ValueOf(actual.ID),
+		//		ServerIP:  controlPlanesIPs,
+		//	})
+		//	if err != nil {
+		//		return fmt.Errorf("updating back-end server IPs for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
+		//	}
+		//}
 
 	} else {
 
@@ -215,9 +216,17 @@ type terraformLBBackend struct {
 
 func (l *LBBackend) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *LBBackend) error {
 	var serverIPs []*terraformWriter.Literal
-	for _, instance := range expected.ControlPlanes {
-		if instance.Role != nil && *instance.Role == scaleway.TagRoleControlPlane {
-			serverIPs = append(serverIPs, instance.TerraformLinkIP())
+	resources, err := t.GetResourcesByType()
+	if err != nil {
+		return err
+	}
+	servers := resources["scaleway_instance_server"]
+	for _, server := range servers {
+		tfInstance := server.(terraformInstance)
+		for _, tag := range tfInstance.Tags {
+			if strings.HasSuffix(tag, scaleway.TagRoleControlPlane) && strings.HasPrefix(tag, scaleway.TagNameRolePrefix) {
+				serverIPs = append(serverIPs, terraformWriter.LiteralProperty("scaleway_instance_server", fi.ValueOf(tfInstance.Name), "private_ip"))
+			}
 		}
 	}
 

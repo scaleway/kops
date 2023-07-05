@@ -56,18 +56,6 @@ type Instance struct {
 var _ fi.CloudupTask = &Instance{}
 var _ fi.CompareWithID = &Instance{}
 
-var _ fi.CloudupHasDependencies = &Instance{}
-
-func (s *Instance) GetDependencies(tasks map[string]fi.CloudupTask) []fi.CloudupTask {
-	var deps []fi.CloudupTask
-	for _, task := range tasks {
-		if _, ok := task.(*LoadBalancer); ok {
-			deps = append(deps, task)
-		}
-	}
-	return deps
-}
-
 func (s *Instance) CompareWithID() *string {
 	return s.Name
 }
@@ -398,7 +386,6 @@ type terraformInstance struct {
 	Image      *string                             `cty:"image"`
 	UserData   map[string]*terraformWriter.Literal `cty:"user_data"`
 	RootVolume []terraformVolume                   `cty:"root_volume"`
-	PrivateIP  *string                             `cty:"private_ip"`
 }
 
 func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *Instance) error {

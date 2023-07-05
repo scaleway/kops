@@ -78,12 +78,6 @@ func (b *APILoadBalancerModelBuilder) Build(c *fi.CloudupModelBuilderContext) er
 		SslCompatibilityLevel: string(lb.SSLCompatibilityLevelSslCompatibilityLevelUnknown),
 	}
 
-	controlPlanes := b.MasterInstanceGroups()
-	var cpInstances []*scalewaytasks.Instance
-	for _, controlPlane := range controlPlanes {
-		cpInstances = append(cpInstances, &scalewaytasks.Instance{Name: &controlPlane.Name})
-	}
-
 	c.AddTask(loadBalancer)
 
 	lbBackendHttps, lbFrontendHttps := createLbBackendAndFrontend("https", wellknownports.KubeAPIServer, zone, loadBalancer)
