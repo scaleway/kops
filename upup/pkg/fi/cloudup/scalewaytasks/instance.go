@@ -114,19 +114,8 @@ func (s *Instance) Find(c *fi.CloudupContext) (*Instance, error) {
 
 	server := servers[0]
 
-	igName := ""
-	for _, tag := range server.Tags {
-		if strings.HasPrefix(tag, scaleway.TagInstanceGroup) {
-			igName = strings.TrimPrefix(tag, scaleway.TagInstanceGroup+"=")
-		}
-	}
-
-	role := scaleway.TagRoleWorker
-	for _, tag := range server.Tags {
-		if tag == scaleway.TagNameRolePrefix+"="+scaleway.TagRoleControlPlane {
-			role = scaleway.TagRoleControlPlane
-		}
-	}
+	igName := scaleway.InstanceGroupNameFromTags(server.Tags)
+	role := scaleway.InstanceRoleFromTags(server.Tags)
 
 	imageLabel, err := imageLabelFromID(c, cloud, server.Image.ID)
 	if err != nil {

@@ -18,7 +18,6 @@ package scalewaytasks
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
@@ -223,10 +222,8 @@ func (l *LBBackend) RenderTerraform(t *terraform.TerraformTarget, actual, expect
 	servers := resources["scaleway_instance_server"]
 	for _, server := range servers {
 		tfInstance := server.(terraformInstance)
-		for _, tag := range tfInstance.Tags {
-			if strings.HasSuffix(tag, scaleway.TagRoleControlPlane) && strings.HasPrefix(tag, scaleway.TagNameRolePrefix) {
-				serverIPs = append(serverIPs, terraformWriter.LiteralProperty("scaleway_instance_server", fi.ValueOf(tfInstance.Name), "private_ip"))
-			}
+		if role := scaleway.InstanceRoleFromTags(tfInstance.Tags); role == scaleway.TagRoleControlPlane {
+			serverIPs = append(serverIPs, terraformWriter.LiteralProperty("scaleway_instance_server", fi.ValueOf(tfInstance.Name), "private_ip"))
 		}
 	}
 
@@ -254,19 +251,18 @@ func getControlPlanesIPs(scwCloud scaleway.ScwCloud, lb *LoadBalancer, zone scw.
 	}
 
 	for _, server := range servers {
-		for _, tag := range server.Tags {
-			if strings.HasSuffix(tag, scaleway.TagRoleControlPlane) && strings.HasPrefix(tag, scaleway.TagNameRolePrefix) {
-				// We update the server's infos (to get its IP)
-				srv, err := instanceService.GetServer(&instance.GetServerRequest{
-					Zone:     zone,
-					ServerID: server.ID,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("getting server %s for load-balancer's back-end: %w", srv.Server.ID, err)
-				}
-				controlPlanePrivateIPs = append(controlPlanePrivateIPs, *srv.Server.PrivateIP)
+		if role := scaleway.InstanceRoleFromTags(server.Tags); role == scaleway.TagRoleControlPlane {
+			// We update the server's infos (to get its IP)
+			srv, err := instanceService.GetServer(&instance.GetServerRequest{
+				Zone:     zone,
+				ServerID: server.ID,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("getting server %s for load-balancer's back-end: %w", srv.Server.ID, err)
 			}
+			controlPlanePrivateIPs = append(controlPlanePrivateIPs, *srv.Server.PrivateIP)
 		}
 	}
+
 	return controlPlanePrivateIPs, nil
 }
