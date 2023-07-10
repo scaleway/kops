@@ -133,7 +133,7 @@ func CreateValidScalewayProfile() (*scw.Profile, error) {
 		return &profile, nil
 	}
 
-	// We load the credentials form the profile first
+	// We load the credentials from the profile first
 	profileFromScwConfig, err := getScalewayProfile()
 	if err != nil {
 		return nil, err
@@ -168,31 +168,17 @@ func CreateValidScalewayProfile() (*scw.Profile, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	fmt.Printf("******************* Scaleway credentials *******************\n\n")
+
+	fmt.Printf("SCW_PROFILE = %s\n", os.Getenv("SCW_PROFILE"))
+	fmt.Printf("SCW_ACCESS_KEY = %s\n", *profile.AccessKey)
+	fmt.Printf("SCW_SECRET_KEY = %s\n", *profile.SecretKey)
+	fmt.Printf("SCW_DEFAULT_PROJECT_ID = %s\n", *profile.DefaultProjectID)
+
 	return &profile, nil
 }
 
-//func CreateScalewayClient(clientOptions ...scw.ClientOption) (*scw.Client, error) {
-//	profile, err := CreateValidScalewayProfile()
-//	if err != nil {
-//		return nil, err
-//	}
-//	clientOptions = append(clientOptions, scw.WithProfile(profile))
-//	clientOptions = append(clientOptions, scw.WithUserAgent(KopsUserAgentPrefix+kopsv.Version))
-//
-//	scwClient, err := scw.NewClient(clientOptions...)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return scwClient, nil
-//}
-
 func displayEnv() {
-	fmt.Printf("******************* Scaleway credentials *******************\n\n")
-
-	fmt.Printf(fmt.Sprintf("SCW_ACCESS_KEY = %s\n", os.Getenv("SCW_ACCESS_KEY")))
-	fmt.Printf(fmt.Sprintf("SCW_SECRET_KEY = %s\n", os.Getenv("SCW_SECRET_KEY")))
-	fmt.Printf(fmt.Sprintf("SCW_DEFAULT_PROJECT_ID = %s\n", os.Getenv("SCW_DEFAULT_PROJECT_ID")))
-
 	fmt.Printf("\n********************* S3 credentials *********************\n\n")
 
 	fmt.Printf(fmt.Sprintf("S3_REGION = %s\n", os.Getenv("S3_REGION")))
