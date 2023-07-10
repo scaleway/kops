@@ -378,44 +378,56 @@ type terraformInstance struct {
 }
 
 func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *Instance) error {
-	tfName := strings.ReplaceAll(fi.ValueOf(expected.Name), ".", "-")
+	for i := 0; i < expected.Count; i++ {
+		uniqueName := fmt.Sprintf("%s-%d", fi.ValueOf(expected.Name), i)
+		tfName := strings.ReplaceAll(uniqueName, ".", "-")
 
-	tfInstanceIP := terraformInstanceIP{}
-	err := t.RenderResource("scaleway_instance_ip", tfName, tfInstanceIP)
-	if err != nil {
-		return err
-	}
-
-	tfInstance := terraformInstance{
-		Name:  expected.Name,
-		IPID:  terraformWriter.LiteralProperty("scaleway_instance_ip", tfName, "id"),
-		Type:  expected.CommercialType,
-		Tags:  expected.Tags,
-		Image: expected.Image,
-	}
-	if expected.UserData != nil {
-		userDataBytes, err := fi.ResourceAsBytes(fi.ValueOf(expected.UserData))
+		tfInstanceIP := terraformInstanceIP{}
+		err := t.RenderResource("scaleway_instance_ip", tfName, tfInstanceIP)
 		if err != nil {
 			return err
 		}
-		if userDataBytes != nil {
-			tfUserData, err := t.AddFileBytes("scaleway_instance_server", tfName, "user_data", userDataBytes, false)
+
+		tfInstance := terraformInstance{
+			Name:  &uniqueName,
+			IPID:  terraformWriter.LiteralProperty("scaleway_instance_ip", tfName, "id"),
+			Type:  expected.CommercialType,
+			Tags:  expected.Tags,
+			Image: expected.Image,
+		}
+		if expected.UserData != nil {
+			userDataBytes, err := fi.ResourceAsBytes(fi.ValueOf(expected.UserData))
 			if err != nil {
 				return err
 			}
-			tfInstance.UserData = map[string]*terraformWriter.Literal{
-				"cloud-init": tfUserData,
+			if userDataBytes != nil {
+				tfUserData, err := t.AddFileBytes("scaleway_instance_server", tfName, "user_data", userDataBytes, false)
+				if err != nil {
+					return err
+				}
+				tfInstance.UserData = map[string]*terraformWriter.Literal{
+					"cloud-init": tfUserData,
+				}
+				if *expected.Role == scaleway.TagRoleWorker {
+					clusterName := scaleway.ClusterNameFromTags(expected.Tags)
+					tfLBName := "api-" + strings.ReplaceAll(clusterName, ".", "-")
+					tfInstance.UserData[scaleway.UserDataLBIPKey] = terraformWriter.LiteralProperty("scaleway_lb_ip", tfLBName, "ip_address")
+				}
 			}
 		}
-	}
-	if expected.VolumeSize != nil {
-		tfInstance.RootVolume = []terraformVolume{
-			{
-				SizeInGB: expected.VolumeSize,
-			},
+		if expected.VolumeSize != nil {
+			tfInstance.RootVolume = []terraformVolume{
+				{
+					SizeInGB: expected.VolumeSize,
+				},
+			}
+		}
+		err = t.RenderResource("scaleway_instance_server", tfName, tfInstance)
+		if err != nil {
+			return err
 		}
 	}
-	return t.RenderResource("scaleway_instance_server", tfName, tfInstance)
+	return nil
 }
 
 func (i *Instance) TerraformLinkIP() *terraformWriter.Literal {

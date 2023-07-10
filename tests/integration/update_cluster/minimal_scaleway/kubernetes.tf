@@ -13,6 +13,7 @@ output "region" {
 
 provider "scaleway" {
   region = "fr-par"
+  zone   = "fr-par-1"
 }
 
 provider "aws" {
@@ -169,31 +170,38 @@ resource "scaleway_iam_ssh_key" "kubernetes-scw-minimal-k8s-local-be_9e_c3_eb_cb
   public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKqbVEozfAqng0gx8HTUu69EppcE5SWet6MpwrGShqMVUC4wkoiuVtJDPhMmWmdt7B7Ttc5pvnAZAZaQ6TKMguyBoAyS7qOTLU9/hM803XtSiwQUftOXiJfmsqAXEc8yDyb7UnrF8X7aA3gQJsnQBGJGdp+C88dPHNZenw4PnQc8BNYTCXG9d8F5vJ3xQ5qbiG4HVNoQ2CZh2ht+GedZJ3hl9lMJ24kE/cbMCLKxabMP4ROetECG6PU251jnm84NA8rm0Av/JMmn/c9CFAe0D0D1dGDlHWPsk4mbhGKJ0yU0YliatmPfmgSasismbYzIFf7VPq91ARzRUbavd1fYMBmkMsce0YR/5FdtrpzRhqDzuvwQgQRsoTcttdvp0puFcrtNefMfk8NCbBedIlkzOFxfGiBbe6jde4wqsqEnSrNHwZ2b+Er8z7vjcDPBqYk3gubmMBCrYxg6o1lOS6tTN0kJDUlyKO2AN1ZDr3mpkbhkvZV/N7gLglcClM0X5X7iM= leila@leila-ThinkPad-T14s-Gen-2i"
 }
 
-resource "scaleway_instance_ip" "control-plane-fr-par-1" {
+resource "scaleway_instance_ip" "control-plane-fr-par-1-0" {
 }
 
-resource "scaleway_instance_ip" "nodes-fr-par-1" {
+resource "scaleway_instance_ip" "nodes-fr-par-1-0" {
 }
 
-resource "scaleway_instance_server" "control-plane-fr-par-1" {
+resource "scaleway_instance_server" "control-plane-fr-par-1-0" {
   image = "ubuntu_focal"
-  ip_id = scaleway_instance_ip.control-plane-fr-par-1.id
-  name  = "control-plane-fr-par-1"
-  tags  = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=control-plane-fr-par-1", "noprefix=kops.k8s.io/role=ControlPlane"]
-  type  = "PLAY2-NANO"
+  ip_id = scaleway_instance_ip.control-plane-fr-par-1-0.id
+  name  = "control-plane-fr-par-1-0"
+  root_volume {
+    size_in_gb = 50
+  }
+  tags = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=control-plane-fr-par-1", "noprefix=kops.k8s.io/role=ControlPlane"]
+  type = "PLAY2-NANO"
   user_data = {
-    "cloud-init" = filebase64("${path.module}/data/scaleway_instance_server_control-plane-fr-par-1_user_data")
+    "cloud-init" = file("${path.module}/data/scaleway_instance_server_control-plane-fr-par-1-0_user_data")
   }
 }
 
-resource "scaleway_instance_server" "nodes-fr-par-1" {
+resource "scaleway_instance_server" "nodes-fr-par-1-0" {
   image = "ubuntu_focal"
-  ip_id = scaleway_instance_ip.nodes-fr-par-1.id
-  name  = "nodes-fr-par-1"
-  tags  = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=nodes-fr-par-1"]
-  type  = "PLAY2-NANO"
+  ip_id = scaleway_instance_ip.nodes-fr-par-1-0.id
+  name  = "nodes-fr-par-1-0"
+  root_volume {
+    size_in_gb = 50
+  }
+  tags = ["noprefix=kops.k8s.io/cluster=scw-minimal.k8s.local", "noprefix=kops.k8s.io/instance-group=nodes-fr-par-1"]
+  type = "PLAY2-NANO"
   user_data = {
-    "cloud-init" = filebase64("${path.module}/data/scaleway_instance_server_nodes-fr-par-1_user_data")
+    "api-server-ip" = scaleway_lb_ip.api-scw-minimal-k8s-local.ip_address
+    "cloud-init"    = file("${path.module}/data/scaleway_instance_server_nodes-fr-par-1-0_user_data")
   }
 }
 
@@ -223,6 +231,7 @@ resource "scaleway_lb_backend" "lb-backend-https" {
   forward_protocol = "tcp"
   lb_id            = scaleway_lb.api-scw-minimal-k8s-local.id
   name             = "lb-backend-https"
+  server_ips       = [scaleway_instance_server.control-plane-fr-par-1-0.private_ip]
 }
 
 resource "scaleway_lb_backend" "lb-backend-kops-controller" {
@@ -230,6 +239,7 @@ resource "scaleway_lb_backend" "lb-backend-kops-controller" {
   forward_protocol = "tcp"
   lb_id            = scaleway_lb.api-scw-minimal-k8s-local.id
   name             = "lb-backend-kops-controller"
+  server_ips       = [scaleway_instance_server.control-plane-fr-par-1-0.private_ip]
 }
 
 resource "scaleway_lb_frontend" "lb-frontend-https" {

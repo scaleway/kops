@@ -48,6 +48,7 @@ const (
 	TagRoleControlPlane      = "ControlPlane"
 	TagRoleWorker            = "Node"
 	KopsUserAgentPrefix      = "kubernetes-kops/"
+	UserDataLBIPKey          = "api-server-ip"
 	TagNeedsUpdate           = "noprefix=kops.k8s.io/needs-update"
 )
 
