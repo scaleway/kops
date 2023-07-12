@@ -41,18 +41,6 @@ type Volume struct {
 
 var _ fi.CompareWithID = &Volume{}
 
-var _ fi.CloudupHasDependencies = &Volume{}
-
-func (v *Volume) GetDependencies(tasks map[string]fi.CloudupTask) []fi.CloudupTask {
-	var deps []fi.CloudupTask
-	for _, task := range tasks {
-		if _, ok := task.(*Instance); ok {
-			deps = append(deps, task)
-		}
-	}
-	return deps
-}
-
 func (v *Volume) CompareWithID() *string {
 	return v.ID
 }
