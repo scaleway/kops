@@ -168,12 +168,12 @@ func CreateValidScalewayProfile() (*scw.Profile, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	fmt.Printf("******************* Scaleway credentials *******************\n\n")
-
-	fmt.Printf("SCW_PROFILE = %s\n", os.Getenv("SCW_PROFILE"))
-	fmt.Printf("SCW_ACCESS_KEY = %s\n", *profile.AccessKey)
-	fmt.Printf("SCW_SECRET_KEY = %s\n", *profile.SecretKey)
-	fmt.Printf("SCW_DEFAULT_PROJECT_ID = %s\n", *profile.DefaultProjectID)
+	//fmt.Printf("******************* Scaleway credentials *******************\n\n")
+	//
+	//fmt.Printf("SCW_PROFILE = %s\n", os.Getenv("SCW_PROFILE"))
+	//fmt.Printf("SCW_ACCESS_KEY = %s\n", *profile.AccessKey)
+	//fmt.Printf("SCW_SECRET_KEY = %s\n", *profile.SecretKey)
+	//fmt.Printf("SCW_DEFAULT_PROJECT_ID = %s\n", *profile.DefaultProjectID)
 
 	return &profile, nil
 }

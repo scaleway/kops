@@ -435,21 +435,21 @@ func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expecte
 		}
 
 		// We attach etcd volumes here, so it doesn't mess with the terraform state later when doing updates
-		resources, err := t.GetResourcesByType()
-		if err != nil {
-			return err
-		}
-		volumes := resources["scaleway_instance_volume"]
-		for volume, volumeSpec := range volumes {
-			tagsToMatch := map[string]bool{
-				fmt.Sprintf("%s=%s", scaleway.TagClusterName, scaleway.ClusterNameFromTags(expected.Tags)):         false,
-				fmt.Sprintf("%s=%s", scaleway.TagInstanceGroup, scaleway.InstanceGroupNameFromTags(expected.Tags)): false,
-				fmt.Sprintf("%s=%s", scaleway.TagNameRolePrefix, scaleway.TagRoleControlPlane):                     false,
-			}
-			if matched := volumeTagsMatch(volumeSpec.(*terraformVolume).Tags, tagsToMatch); matched {
-				tfInstance.AdditionalVolumeIDs = append(tfInstance.AdditionalVolumeIDs, terraformWriter.LiteralProperty("scaleway_instance_volume", volume, "id"))
-			}
-		}
+		//resources, err := t.GetResourcesByType()
+		//if err != nil {
+		//	return err
+		//}
+		//volumes := resources["scaleway_instance_volume"]
+		//for volume, volumeSpec := range volumes {
+		//	tagsToMatch := map[string]bool{
+		//		fmt.Sprintf("%s=%s", scaleway.TagClusterName, scaleway.ClusterNameFromTags(expected.Tags)):         false,
+		//		fmt.Sprintf("%s=%s", scaleway.TagInstanceGroup, scaleway.InstanceGroupNameFromTags(expected.Tags)): false,
+		//		fmt.Sprintf("%s=%s", scaleway.TagNameRolePrefix, scaleway.TagRoleControlPlane):                     false,
+		//	}
+		//	if matched := volumeTagsMatch(volumeSpec.(*terraformVolume).Tags, tagsToMatch); matched {
+		//		tfInstance.AdditionalVolumeIDs = append(tfInstance.AdditionalVolumeIDs, terraformWriter.LiteralProperty("scaleway_instance_volume", volume, "id"))
+		//	}
+		//}
 
 		// We create an IP for the server (we only render it now to avoid duplicates if Instance task fails)
 		tfInstanceIP := terraformInstanceIP{}

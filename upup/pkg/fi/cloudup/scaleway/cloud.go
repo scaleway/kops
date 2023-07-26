@@ -714,7 +714,7 @@ func (s *scwCloudImplementation) DeleteServer(server *instance.Server) error {
 			PrivateNicID: srv.Server.PrivateNics[0].ID,
 		})
 		if err != nil {
-			return fmt.Errorf("delete instance %s: error detaching private network: %w", server.ID, err)
+			return fmt.Errorf("delete server %s: detaching private network: %w", server.ID, err)
 		}
 		//return err
 	}
