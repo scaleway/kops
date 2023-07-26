@@ -382,14 +382,13 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 type terraformInstanceIP struct{}
 
 type terraformInstance struct {
-	Name                *string                             `cty:"name"`
-	IPID                *terraformWriter.Literal            `cty:"ip_id"`
-	Type                *string                             `cty:"type"`
-	Tags                []string                            `cty:"tags"`
-	Image               *string                             `cty:"image"`
-	UserData            map[string]*terraformWriter.Literal `cty:"user_data"`
-	RootVolume          []terraformVolume                   `cty:"root_volume"`
-	AdditionalVolumeIDs []*terraformWriter.Literal          `cty:"additional_volume_ids"`
+	Name       *string                             `cty:"name"`
+	IPID       *terraformWriter.Literal            `cty:"ip_id"`
+	Type       *string                             `cty:"type"`
+	Tags       []string                            `cty:"tags"`
+	Image      *string                             `cty:"image"`
+	UserData   map[string]*terraformWriter.Literal `cty:"user_data"`
+	RootVolume []terraformVolume                   `cty:"root_volume"`
 }
 
 func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expected, changes *Instance) error {
@@ -454,7 +453,7 @@ func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expecte
 
 		// We create an IP for the server (we only render it now to avoid duplicates if Instance task fails)
 		tfInstanceIP := terraformInstanceIP{}
-		err = t.RenderResource("scaleway_instance_ip", tfName, tfInstanceIP)
+		err := t.RenderResource("scaleway_instance_ip", tfName, tfInstanceIP)
 		if err != nil {
 			return err
 		}

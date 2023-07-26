@@ -154,17 +154,14 @@ func (l *LBBackend) RenderScw(t *scaleway.ScwAPITarget, actual, expected, change
 			return fmt.Errorf("updating back-end for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
 		}
 
-		//TODO(Mia-Cross): find a way to detect changes to control-planes IPs
-		//if changes.ControlPlanes != nil {
-		//	_, err = lbService.SetBackendServers(&lb.ZonedAPISetBackendServersRequest{
-		//		Zone:      zone,
-		//		BackendID: fi.ValueOf(actual.ID),
-		//		ServerIP:  controlPlanesIPs,
-		//	})
-		//	if err != nil {
-		//		return fmt.Errorf("updating back-end server IPs for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
-		//	}
-		//}
+		_, err = lbService.SetBackendServers(&lb.ZonedAPISetBackendServersRequest{
+			Zone:      zone,
+			BackendID: fi.ValueOf(actual.ID),
+			ServerIP:  controlPlanesIPs,
+		})
+		if err != nil {
+			return fmt.Errorf("updating back-end server IPs for load-balancer %s: %w", fi.ValueOf(actual.LoadBalancer.Name), err)
+		}
 
 	} else {
 

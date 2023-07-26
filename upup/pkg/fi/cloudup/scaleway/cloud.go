@@ -684,6 +684,28 @@ func (s *scwCloudImplementation) DeleteServer(server *instance.Server) error {
 		return err
 	}
 
+	// We detach the etcd volumes
+	for _, volume := range srv.Server.Volumes {
+		volumeResponse, err := s.instanceAPI.GetVolume(&instance.GetVolumeRequest{
+			Zone:     s.zone,
+			VolumeID: volume.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("delete server %s: getting infos for volume %s", server.ID, volume.ID)
+		}
+		for _, tag := range volumeResponse.Volume.Tags {
+			if strings.HasPrefix(tag, TagNameEtcdClusterPrefix) {
+				_, err = s.instanceAPI.DetachVolume(&instance.DetachVolumeRequest{
+					Zone:     s.zone,
+					VolumeID: volume.ID,
+				})
+				if err != nil {
+					return fmt.Errorf("delete server %s: detaching volume %s", server.ID, volume.ID)
+				}
+			}
+		}
+	}
+
 	// We detach the private network
 	if len(srv.Server.PrivateNics) > 0 {
 		err = s.instanceAPI.DeletePrivateNIC(&instance.DeletePrivateNICRequest{
@@ -694,7 +716,7 @@ func (s *scwCloudImplementation) DeleteServer(server *instance.Server) error {
 		if err != nil {
 			return fmt.Errorf("delete instance %s: error detaching private network: %w", server.ID, err)
 		}
-		return err
+		//return err
 	}
 
 	// We detach the etcd volumes
