@@ -59,7 +59,6 @@ spec:
             memory: 50Mi
         securityContext:
           runAsNonRoot: true
-          runAsUser: 999
         volumeMounts:
         - mountPath: /var/run/secrets/amazonaws.com/
           name: token-amazonaws-com
