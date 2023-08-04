@@ -120,7 +120,7 @@ type scwCloudImplementation struct {
 // NewScwCloud returns a Cloud with a Scaleway Client using the env vars SCW_PROFILE or
 // SCW_ACCESS_KEY, SCW_SECRET_KEY and SCW_DEFAULT_PROJECT_ID
 func NewScwCloud(tags map[string]string) (ScwCloud, error) {
-	displayEnv()
+	//displayEnv()
 
 	region, err := scw.ParseRegion(tags["region"])
 	if err != nil {

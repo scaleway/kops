@@ -60,14 +60,6 @@ func ParseZoneFromClusterSpec(clusterSpec kops.ClusterSpec) (scw.Zone, error) {
 	return scw.Zone(zone), nil
 }
 
-func ParseRegionFromZone(zone scw.Zone) (region scw.Region, err error) {
-	region, err = scw.ParseRegion(strings.TrimRight(string(zone), "-123"))
-	if err != nil {
-		return "", fmt.Errorf("could not determine region from zone %s: %w", zone, err)
-	}
-	return region, nil
-}
-
 func ClusterNameFromTags(tags []string) string {
 	for _, tag := range tags {
 		if strings.HasPrefix(tag, TagClusterName) {

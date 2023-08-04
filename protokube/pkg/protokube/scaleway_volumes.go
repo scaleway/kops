@@ -56,7 +56,7 @@ func NewScwCloudProvider() (*ScwCloudProvider, error) {
 	}
 	klog.V(4).Infof("Found zone of the running server: %v", zone)
 
-	region, err := scaleway.ParseRegionFromZone(zone)
+	region, err := zone.Region()
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse Scaleway region: %s", err)
 	}

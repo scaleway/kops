@@ -32,8 +32,6 @@ import (
 	"k8s.io/kops/upup/pkg/fi/cloudup/terraformWriter"
 )
 
-var commercialTypesWithBlockStorageOnly = []string{"PRO", "PLAY", "ENT"}
-
 // +kops:fitask
 type Instance struct {
 	Name      *string
