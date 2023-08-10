@@ -48,8 +48,6 @@ const (
 	TagRoleControlPlane      = "ControlPlane"
 	TagRoleWorker            = "Node"
 	KopsUserAgentPrefix      = "kubernetes-kops/"
-	UserDataLBIPKey          = "api-server-ip"
-	TagNeedsUpdate           = "noprefix=kops.k8s.io/needs-update"
 )
 
 // ScwCloud exposes all the interfaces required to operate on Scaleway resources
@@ -108,13 +106,13 @@ type scwCloudImplementation struct {
 	dns    dnsprovider.Interface
 	tags   map[string]string
 
-	domainAPI   *domain.API
-	gatewayAPI  *vpcgw.API
-	iamAPI      *iam.API
-	instanceAPI *instance.API
-	lbAPI       *lb.ZonedAPI
+	domainAPI      *domain.API
+	gatewayAPI     *vpcgw.API
+	iamAPI         *iam.API
+	instanceAPI    *instance.API
+	lbAPI          *lb.ZonedAPI
 	marketplaceAPI *marketplace.API
-	vpcAPI      *vpc.API
+	vpcAPI         *vpc.API
 }
 
 // NewScwCloud returns a Cloud with a Scaleway Client using the env vars SCW_PROFILE or
@@ -159,12 +157,12 @@ func NewScwCloud(tags map[string]string) (ScwCloud, error) {
 		dns:            dns.NewProvider(domain.NewAPI(scwClient)),
 		tags:           tags,
 		domainAPI:      domain.NewAPI(scwClient),
-		gatewayAPI:  vpcgw.NewAPI(scwClient),
+		gatewayAPI:     vpcgw.NewAPI(scwClient),
 		iamAPI:         iam.NewAPI(scwClient),
 		instanceAPI:    instance.NewAPI(scwClient),
 		lbAPI:          lb.NewZonedAPI(scwClient),
 		marketplaceAPI: marketplace.NewAPI(scwClient),
-		vpcAPI:      vpc.NewAPI(scwClient),
+		vpcAPI:         vpc.NewAPI(scwClient),
 	}, nil
 }
 
