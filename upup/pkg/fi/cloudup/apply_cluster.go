@@ -737,6 +737,13 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) error {
 		if err := tf.AddOutputVariable("region", terraformWriter.LiteralFromStringValue(cloud.Region())); err != nil {
 			return err
 		}
+		if cluster.Spec.GetCloudProvider() == kops.CloudProviderScaleway {
+			scwCloud := cloud.(scaleway.ScwCloud)
+			err := tf.AddOutputVariable("zone", terraformWriter.LiteralFromStringValue(scwCloud.Zone()))
+			if err != nil {
+				return err
+			}
+		}
 
 		if project != "" {
 			if err := tf.AddOutputVariable("project", terraformWriter.LiteralFromStringValue(project)); err != nil {
@@ -752,6 +759,9 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) error {
 
 		// Can cause conflicts with terraform management
 		shouldPrecreateDNS = false
+		if cluster.Spec.GetCloudProvider() == kops.CloudProviderScaleway {
+			shouldPrecreateDNS = true
+		}
 
 	case TargetDryRun:
 		var out io.Writer = os.Stdout
