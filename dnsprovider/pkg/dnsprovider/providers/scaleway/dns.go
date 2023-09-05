@@ -344,30 +344,11 @@ func (r *resourceRecordChangeset) Apply(ctx context.Context) error {
 
 	// Scaleway's Domain API doesn't allow edits to the same record if one request, so we have to check for duplicates
 	// in the upsert category and if there are, treat them as additions instead
-	//recordsToUpdateWithoutDups := make(map[string]*domain.Record, 0)
-
-	//		} else {
-	//			newUpdateRecordsRequest = append(newUpdateRecordsRequest, &domain.RecordChange{
-	//				Add: &domain.RecordChangeAdd{
-	//					Records:
-	//						},
-	//			})
-	//		}
-	//	}
-	//}
-
 	if len(r.upserts) > 0 {
-		// On boucle sur un array de >> dnsprovider.ResourceRecordSet << EXPECTED
 		for _, rrset := range r.upserts {
-			// On boucle sur un array de string (les datas) EXPECTED
 			for _, rrdata := range rrset.Rrdatas() {
 				found := false
-				// On boucle sur un array de domain.Record ACTUAL
 				for _, record := range records {
-					//if _, ok := recordsToUpdateWithoutDups[record.Name]; ok {
-					//	r.Add()
-					//}
-					//recordsToUpdateWithoutDups[record.Name] = record
 					recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, r.zone.Name())
 					klog.Infof("COMPARING [%s][%s]\tTYPES = %s|%s", recordNameWithZone, dns.EnsureDotSuffix(rrset.Name()), rrset.Type(), rrstype.RrsType(record.Type))
 					if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && rrset.Type() == rrstype.RrsType(record.Type) {
