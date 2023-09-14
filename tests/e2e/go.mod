@@ -7,6 +7,8 @@ replace k8s.io/kops => ../../.
 // These should match the go.mod from k8s.io/kops
 replace k8s.io/client-go => k8s.io/client-go v0.24.2
 
+replace google.golang.org/grpc => google.golang.org/grpc v1.54.1
+
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
