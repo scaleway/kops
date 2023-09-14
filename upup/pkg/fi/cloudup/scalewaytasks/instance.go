@@ -126,7 +126,6 @@ func (s *Instance) Find(c *fi.CloudupContext) (*Instance, error) {
 	}
 
 	server := servers[0]
-
 	igName := scaleway.InstanceGroupNameFromTags(server.Tags)
 	role := scaleway.InstanceRoleFromTags(server.Tags)
 
@@ -232,7 +231,7 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 		// We create a unique name for each server
 		uniqueName, err := uniqueName(cloud, scaleway.ClusterNameFromTags(expected.Tags), fi.ValueOf(expected.Name))
 		if err != nil {
-			return fmt.Errorf("error rendering server group: computing unique name for server: %w", err)
+			return fmt.Errorf("error rendering server group %s: computing unique name for server: %w", fi.ValueOf(expected.Name), err)
 		}
 
 		createServerRequest := instance.CreateServerRequest{
@@ -382,7 +381,9 @@ func (_ *Instance) RenderScw(t *scaleway.ScwAPITarget, actual, expected, changes
 	return nil
 }
 
-type terraformInstanceIP struct{}
+type terraformInstanceIP struct {
+	Tags []string `cty:"tags"`
+}
 
 type terraformInstance struct {
 	Name                *string                             `cty:"name"`
@@ -411,12 +412,7 @@ func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expecte
 			Image:               expected.Image,
 			EnableDynamicIP:     fi.PtrTo(true),
 			ReplaceOnTypeChange: fi.PtrTo(false),
-			Lifecycle: &terraform.Lifecycle{
-				IgnoreChanges: []*terraformWriter.Literal{&terraformWriter.Literal{String: "additional_volume_ids"}},
-			},
-		}
-		if changes != nil {
-			tfInstance.Tags = append(tfInstance.Tags, scaleway.TagNeedsUpdate)
+			Lifecycle:           nil,
 		}
 
 		// We load the cloud-init script in the instance user data
@@ -446,8 +442,22 @@ func (_ *Instance) RenderTerraform(t *terraform.TerraformTarget, actual, expecte
 			}
 		}
 
+		// For control-plane instances, we want to ignore changes to additional volumes since the etcd-manager will
+		// attach etcd volumes outside of Terraform
+		if scaleway.InstanceRoleFromTags(expected.Tags) == scaleway.TagRoleControlPlane {
+			tfInstance.Lifecycle = &terraform.Lifecycle{
+				IgnoreChanges: []*terraformWriter.Literal{{String: "additional_volume_ids"}},
+			}
+		}
+
 		// We create an IP for the server (we only render it now to avoid duplicates if Instance task fails)
 		tfInstanceIP := terraformInstanceIP{}
+		for _, tag := range expected.Tags {
+			if strings.HasPrefix(tag, scaleway.TagClusterName) {
+				tfInstanceIP.Tags = []string{tag}
+				break
+			}
+		}
 		err := t.RenderResource("scaleway_instance_ip", tfName, tfInstanceIP)
 		if err != nil {
 			return err
@@ -514,21 +524,6 @@ func imageLabelFromID(c *fi.CloudupContext, cloud scaleway.ScwCloud, id string) 
 		return "", fmt.Errorf("getting image from the marketplace: %w", err)
 	}
 	return localImage.Label, nil
-}
-
-func volumeTagsMatch(volumeTags []string, tagsToMatch map[string]bool) bool {
-	for _, tag := range volumeTags {
-		if _, ok := tagsToMatch[tag]; ok {
-			tagsToMatch[tag] = true
-		}
-	}
-	volumeMatched := true
-	for _, tagMatched := range tagsToMatch {
-		if !tagMatched {
-			volumeMatched = false
-		}
-	}
-	return volumeMatched
 }
 
 func findFirstFreeIndex(existing []*instance.Server) int {

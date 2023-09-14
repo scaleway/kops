@@ -680,7 +680,7 @@ func (p *S3Path) RenderTerraform(w *terraformWriter.TerraformWriter, name string
 
 		content, err := w.AddFileBytes("scaleway_object", name, "content", bytes, false)
 		if err != nil {
-			fmt.Errorf("error rendering Scaleway file: %w", err)
+			return fmt.Errorf("error rendering Scaleway file: %w", err)
 		}
 
 		tf := terraformScwFile{

@@ -82,10 +82,9 @@ func (b *InstanceModelBuilder) Build(c *fi.CloudupModelBuilderContext) error {
 		// block storage volume a big enough size (default size is 10GB)
 		for _, commercialType := range commercialTypesWithBlockStorageOnly {
 			if strings.HasPrefix(ig.Spec.MachineType, commercialType) {
-				continue
+				instance.VolumeSize = fi.PtrTo(50)
+				break
 			}
-			instance.VolumeSize = fi.PtrTo(50)
-			break
 		}
 
 		c.AddTask(&instance)

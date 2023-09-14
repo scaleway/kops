@@ -204,16 +204,27 @@ func (r *resourceRecordSets) List() ([]dnsprovider.ResourceRecordSet, error) {
 	}
 
 	var rrsets []dnsprovider.ResourceRecordSet
+	rrsetsWithoutDups := make(map[string]*resourceRecordSet)
+
 	for _, record := range records {
 		// The scaleway API returns the record without the zone
 		// but the consumers of this interface expect the zone to be included
 		recordName := dns.EnsureDotSuffix(record.Name) + r.Zone().Name()
-		rrsets = append(rrsets, &resourceRecordSet{
-			name:       recordName,
-			data:       []string{record.Data},
-			ttl:        int(record.TTL),
-			recordType: rrstype.RrsType(record.Type),
-		})
+		recordKey := recordName + "_" + record.Type.String()
+		if rrset, ok := rrsetsWithoutDups[recordKey]; !ok {
+			rrsetsWithoutDups[recordKey] = &resourceRecordSet{
+				name:       recordName,
+				data:       []string{record.Data},
+				ttl:        int(record.TTL),
+				recordType: rrstype.RrsType(record.Type),
+			}
+		} else {
+			rrset.data = append(rrset.data, record.Data)
+		}
+	}
+
+	for _, rrset := range rrsetsWithoutDups {
+		rrsets = append(rrsets, rrset)
 	}
 
 	return rrsets, nil
@@ -333,7 +344,7 @@ func (r *resourceRecordChangeset) Apply(ctx context.Context) error {
 		return nil
 	}
 
-	updateRecordsRequest := []*domain.RecordChange(nil)
+	changeBatch := []*domain.RecordChange(nil)
 	klog.V(8).Infof("applying changes in record change set : [ %d additions | %d upserts | %d removals ]",
 		len(r.additions), len(r.upserts), len(r.removals))
 
@@ -346,128 +357,32 @@ func (r *resourceRecordChangeset) Apply(ctx context.Context) error {
 	// in the upsert category and if there are, treat them as additions instead
 	if len(r.upserts) > 0 {
 		for _, rrset := range r.upserts {
-			for _, rrdata := range rrset.Rrdatas() {
-				found := false
-				for _, record := range records {
-					recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, r.zone.Name())
-					klog.Infof("COMPARING [%s][%s]\tTYPES = %s|%s", recordNameWithZone, dns.EnsureDotSuffix(rrset.Name()), rrset.Type(), rrstype.RrsType(record.Type))
-					if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && rrset.Type() == rrstype.RrsType(record.Type) {
-						found = true
-						klog.Infof("changing DNS record %q of zone %q", record.Name, r.zone.Name())
-						updateRecordsRequest = append(updateRecordsRequest, &domain.RecordChange{
-							Set: &domain.RecordChangeSet{
-								ID: &record.ID,
-								Records: []*domain.Record{
-									{
-										Name: record.Name,
-										Data: rrdata,
-										TTL:  uint32(rrset.Ttl()),
-										Type: domain.RecordType(rrset.Type()),
-									},
-								},
-							},
-						})
-					}
-				}
-				if found == false {
-					r.additions = append(r.additions, rrset)
+			for i, rrdata := range rrset.Rrdatas() {
+				if i == 0 {
+					changeBatch = putRecordToUpdateInChangeBatch(changeBatch, rrset, r.zone.Name(), records, rrdata)
+				} else {
+					rrsetFromIndex1 := r.rrsets.New(rrset.Name(), rrset.Rrdatas()[1:], rrset.Ttl(), rrset.Type())
+					changeBatch = putRecordToAddInChangeBatch(changeBatch, rrsetFromIndex1, r.zone.Name())
+					break
 				}
 			}
 		}
 	}
-
 	if len(r.additions) > 0 {
-		recordsToAdd := []*domain.Record(nil)
 		for _, rrset := range r.additions {
-			recordName := strings.TrimSuffix(rrset.Name(), ".")
-			recordName = strings.TrimSuffix(recordName, "."+r.zone.Name())
-			for _, rrdata := range rrset.Rrdatas() {
-				recordsToAdd = append(recordsToAdd, &domain.Record{
-					Name: recordName,
-					Data: rrdata,
-					TTL:  uint32(rrset.Ttl()),
-					Type: domain.RecordType(rrset.Type()),
-				})
-			}
-			klog.V(8).Infof("adding new DNS record %q to zone %q", recordName, r.zone.name)
-			updateRecordsRequest = append(updateRecordsRequest, &domain.RecordChange{
-				Add: &domain.RecordChangeAdd{
-					Records: recordsToAdd,
-				},
-			})
+			changeBatch = putRecordToAddInChangeBatch(changeBatch, rrset, r.zone.Name())
 		}
 	}
-
 	if len(r.removals) > 0 {
 		for _, rrset := range r.removals {
-			for _, record := range records {
-				recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, r.zone.Name())
-				if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && record.Data == rrset.Rrdatas()[0] &&
-					rrset.Type() == rrstype.RrsType(record.Type) {
-					klog.V(8).Infof("removing DNS record %q of zone %q", record.Name, r.zone.name)
-					updateRecordsRequest = append(updateRecordsRequest, &domain.RecordChange{
-						Delete: &domain.RecordChangeDelete{
-							ID: &record.ID,
-						},
-					})
-				}
-
-			}
+			changeBatch = putRecordToDeleteInChangeBatch(changeBatch, rrset, r.zone.Name(), records)
 		}
 	}
 
-	req := &domain.UpdateDNSZoneRecordsRequest{
+	_, err = r.domainAPI.UpdateDNSZoneRecords(&domain.UpdateDNSZoneRecordsRequest{
 		DNSZone: r.zone.Name(),
-		Changes: updateRecordsRequest,
-	}
-	klog.Info("\n\nRequest content was :\n")
-	klog.Infof("\tDNS Zone: %s\n", req.DNSZone)
-	klog.Infof("\tChanges:\n")
-	for _, change := range req.Changes {
-		typeFound := false
-
-		if change.Add != nil {
-			typeFound = true
-			klog.Infof("\t\t[ADD]: [\n")
-			for _, record := range change.Add.Records {
-				klog.Infof("\t\t\t%s\t%s\t%s\n", record.Name, record.Data, record.ID)
-			}
-
-		} else if change.Set != nil {
-			if typeFound == true {
-				klog.Infof("MULTIPLE TYPES FOUND: %+v", change)
-				continue
-			}
-			typeFound = true
-			klog.Infof("\t\t[SET]: [\n")
-			for _, record := range change.Set.Records {
-				klog.Infof("\t\t\t%s\t%s\t%s\n", record.Name, record.Data, record.ID)
-			}
-
-		} else if change.Delete != nil {
-			if typeFound == true {
-				klog.Infof("MULTIPLE TYPES FOUND: %+v", change)
-				continue
-			}
-			typeFound = true
-			klog.Infof("\t\t[DEL]: %+v\n", *change.Delete.ID)
-
-		} else if change.Clear != nil {
-			if typeFound == true {
-				klog.Infof("MULTIPLE TYPES FOUND: %+v", change)
-				continue
-			}
-			typeFound = true
-			klog.Infof("\t\t[CLR]\n")
-		}
-
-		if typeFound == false {
-			klog.Infof("CHANGE HAD NO TYPE: %+v", change)
-			continue
-		}
-	}
-
-	_, err = r.domainAPI.UpdateDNSZoneRecords(req, scw.WithContext(ctx))
+		Changes: changeBatch,
+	}, scw.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to apply resource record set: %w", err)
 	}
@@ -500,4 +415,63 @@ func listRecords(api DomainAPI, zoneName string) ([]*domain.Record, error) {
 	}
 
 	return records.Records, err
+}
+
+func putRecordToAddInChangeBatch(changeBatch []*domain.RecordChange, rrset dnsprovider.ResourceRecordSet, zoneName string) []*domain.RecordChange {
+	recordsToAdd := []*domain.Record(nil)
+	recordName := strings.TrimSuffix(rrset.Name(), ".")
+	recordName = strings.TrimSuffix(recordName, "."+zoneName)
+	for _, rrdata := range rrset.Rrdatas() {
+		recordsToAdd = append(recordsToAdd, &domain.Record{
+			Name: recordName,
+			Data: rrdata,
+			TTL:  uint32(rrset.Ttl()),
+			Type: domain.RecordType(rrset.Type()),
+		})
+	}
+	klog.V(8).Infof("adding new DNS record %q to zone %q", recordName, zoneName)
+	return append(changeBatch, &domain.RecordChange{
+		Add: &domain.RecordChangeAdd{
+			Records: recordsToAdd,
+		},
+	})
+}
+
+func putRecordToUpdateInChangeBatch(changeBatch []*domain.RecordChange, rrset dnsprovider.ResourceRecordSet, zoneName string, records []*domain.Record, rrdata string) []*domain.RecordChange {
+	for _, record := range records {
+		recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, zoneName)
+		if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && rrset.Type() == rrstype.RrsType(record.Type) {
+			klog.V(8).Infof("changing DNS record %q of zone %q", record.Name, zoneName)
+			return append(changeBatch, &domain.RecordChange{
+				Set: &domain.RecordChangeSet{
+					ID: &record.ID,
+					Records: []*domain.Record{
+						{
+							Name: record.Name,
+							Data: rrdata,
+							TTL:  uint32(rrset.Ttl()),
+							Type: domain.RecordType(rrset.Type()),
+						},
+					},
+				},
+			})
+		}
+	}
+	return changeBatch
+}
+
+func putRecordToDeleteInChangeBatch(changeBatch []*domain.RecordChange, rrset dnsprovider.ResourceRecordSet, zoneName string, records []*domain.Record) []*domain.RecordChange {
+	for _, record := range records {
+		recordNameWithZone := fmt.Sprintf("%s.%s.", record.Name, zoneName)
+		if recordNameWithZone == dns.EnsureDotSuffix(rrset.Name()) && record.Data == rrset.Rrdatas()[0] &&
+			rrset.Type() == rrstype.RrsType(record.Type) {
+			klog.V(8).Infof("removing DNS record %q of zone %q", record.Name, zoneName)
+			return append(changeBatch, &domain.RecordChange{
+				Delete: &domain.RecordChangeDelete{
+					ID: &record.ID,
+				},
+			})
+		}
+	}
+	return changeBatch
 }
