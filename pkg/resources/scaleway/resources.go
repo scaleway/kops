@@ -20,21 +20,24 @@ import (
 	"strings"
 
 	domain "github.com/scaleway/scaleway-sdk-go/api/domain/v2beta1"
-	"k8s.io/kops/pkg/resources"
-	"k8s.io/kops/upup/pkg/fi"
-	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
-
 	iam "github.com/scaleway/scaleway-sdk-go/api/iam/v1alpha1"
 	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
+	"github.com/scaleway/scaleway-sdk-go/api/vpc/v1"
+	"github.com/scaleway/scaleway-sdk-go/api/vpcgw/v1"
+	"k8s.io/kops/pkg/resources"
+	"k8s.io/kops/upup/pkg/fi"
+	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
 )
 
 const (
 	resourceTypeDNSRecord    = "dns-record"
+	resourceTypeGateway      = "gateway"
 	resourceTypeLoadBalancer = "load-balancer"
 	resourceTypeServer       = "server"
 	resourceTypeSSHKey       = "ssh-key"
 	resourceTypeVolume       = "volume"
+	resourceTypeVPC          = "vpc"
 )
 
 type listFn func(fi.Cloud, string) ([]*resources.Resource, error)
@@ -44,10 +47,12 @@ func ListResources(cloud scaleway.ScwCloud, clusterInfo resources.ClusterInfo) (
 	clusterName := clusterInfo.Name
 
 	listFunctions := []listFn{
+		listGateways,
 		listLoadBalancers,
 		listServers,
 		listSSHKeys,
 		listVolumes,
+		listVPCs,
 	}
 	if !strings.HasSuffix(clusterName, ".k8s.local") && !clusterInfo.UsesNoneDNS {
 		listFunctions = append(listFunctions, listDNSRecords)
@@ -90,10 +95,44 @@ func listDNSRecords(cloud fi.Cloud, clusterName string) ([]*resources.Resource, 
 	return resourceTrackers, nil
 }
 
+func listGateways(cloud fi.Cloud, clusterName string) ([]*resources.Resource, error) {
+	c := cloud.(scaleway.ScwCloud)
+	gws, err := c.GetClusterGateways(clusterName)
+	if err != nil {
+		if strings.Contains(err.Error(), "501 Not Implemented") {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	resourceTrackers := []*resources.Resource(nil)
+	for _, gw := range gws {
+		resourceTracker := &resources.Resource{
+			Name: gw.Name,
+			ID:   gw.ID,
+			Type: resourceTypeGateway,
+			Deleter: func(cloud fi.Cloud, tracker *resources.Resource) error {
+				return deleteGateway(cloud, tracker)
+			},
+			Obj: gw,
+		}
+		for _, gwNetwork := range gw.GatewayNetworks {
+			resourceTracker.Blocks = append(resourceTracker.Blocks, resourceTypeVPC+":"+gwNetwork.PrivateNetworkID)
+		}
+
+		resourceTrackers = append(resourceTrackers, resourceTracker)
+	}
+
+	return resourceTrackers, nil
+}
+
 func listLoadBalancers(cloud fi.Cloud, clusterName string) ([]*resources.Resource, error) {
 	c := cloud.(scaleway.ScwCloud)
 	lbs, err := c.GetClusterLoadBalancers(clusterName)
 	if err != nil {
+		if strings.Contains(err.Error(), "501 Not Implemented") {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -132,6 +171,10 @@ func listServers(cloud fi.Cloud, clusterName string) ([]*resources.Resource, err
 			},
 			Obj: server,
 		}
+		for _, privateNic := range server.PrivateNics {
+			resourceTracker.Blocks = append(resourceTracker.Blocks, resourceTypeVPC+":"+privateNic.PrivateNetworkID)
+		}
+
 		resourceTrackers = append(resourceTrackers, resourceTracker)
 	}
 
@@ -189,11 +232,45 @@ func listVolumes(cloud fi.Cloud, clusterName string) ([]*resources.Resource, err
 	return resourceTrackers, nil
 }
 
+func listVPCs(cloud fi.Cloud, clusterName string) ([]*resources.Resource, error) {
+	c := cloud.(scaleway.ScwCloud)
+	vpcs, err := c.GetClusterVPCs(clusterName)
+	if err != nil {
+		if strings.Contains(err.Error(), "501 Not Implemented") {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	resourceTrackers := []*resources.Resource(nil)
+	for _, vpc := range vpcs {
+		resourceTracker := &resources.Resource{
+			Name: vpc.Name,
+			ID:   vpc.ID,
+			Type: resourceTypeVPC,
+			Deleter: func(cloud fi.Cloud, tracker *resources.Resource) error {
+				return deleteVPC(cloud, tracker)
+			},
+			Obj: vpc,
+		}
+		resourceTrackers = append(resourceTrackers, resourceTracker)
+	}
+
+	return resourceTrackers, nil
+}
+
 func deleteDNSRecord(cloud fi.Cloud, tracker *resources.Resource, domainName string) error {
 	c := cloud.(scaleway.ScwCloud)
 	record := tracker.Obj.(*domain.Record)
 
 	return c.DeleteDNSRecord(record, domainName)
+}
+
+func deleteGateway(cloud fi.Cloud, tracker *resources.Resource) error {
+	c := cloud.(scaleway.ScwCloud)
+	gateway := tracker.Obj.(*vpcgw.Gateway)
+
+	return c.DeleteGateway(gateway)
 }
 
 func deleteLoadBalancer(cloud fi.Cloud, tracker *resources.Resource) error {
@@ -222,4 +299,11 @@ func deleteVolume(cloud fi.Cloud, tracker *resources.Resource) error {
 	volume := tracker.Obj.(*instance.Volume)
 
 	return c.DeleteVolume(volume)
+}
+
+func deleteVPC(cloud fi.Cloud, tracker *resources.Resource) error {
+	c := cloud.(scaleway.ScwCloud)
+	privateNetwork := tracker.Obj.(*vpc.PrivateNetwork)
+
+	return c.DeleteVPC(privateNetwork)
 }

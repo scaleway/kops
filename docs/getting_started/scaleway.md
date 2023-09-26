@@ -11,14 +11,10 @@
   * Instance size (also called commercial type)
 * Migrating from single to multi-master
 
-### Coming soon
-
-* [Terraform](https://github.com/scaleway/terraform-provider-scaleway) support
-* Private network
-
 ### Next features to implement
 
 * [Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/scaleway) support
+* Private networks
 * BareMetal servers
 
 ## Requirements
@@ -111,3 +107,39 @@ kops update cluster mycluster.k8s.local --yes
 ```bash
 kops delete cluster mycluster.k8s.local --yes
 ```
+
+# Terraform support
+
+kOps offers the possibility to generate a Terraform configuration corresponding to the cluster that would have been created directly otherwise.
+
+You can find more information on the dedicated page on [kOps Terraform support](../terraform.md) or [Scaleway's Terraform provider's documentation](https://github.com/scaleway/terraform-provider-scaleway).
+
+## For clusters without load-balancers
+
+This concerns clusters using Scaleway DNS. For this type of clusters, things are pretty simple.
+
+```bash
+kops create cluster --cloud=scaleway --name=mycluster.mydomain.com --zones=fr-par-1 --target=terraform --out=$OUTPUT_DIR
+cd $OUTPUT_DIR
+terraform init
+terraform apply
+```
+kOps will generate a `kubernetes.tf` file in the output directory of your choice, you just have to initialize Terraform and apply the configuration.
+NB: keep in mind that every new call to kOps with the flags `--target=terraform --out=$OUTPUT_DIR` will overwrite `kubernetes.tf` so any changes that you made to it will be lost.
+
+## For clusters with load-balancers
+
+This concerns clusters using no DNS and gossip DNS. For these types of cluster, a small trick is needed because kOps doesn't know the IPs of the load-balancer at the time of writing the instances' cloud-init configuration so we will have to run an update.
+```bash
+kops create cluster --cloud=scaleway --name=my.cluster --zones=fr-par-1 --target=terraform --out=$OUTPUT_DIR
+cd $OUTPUT_DIR
+terraform init
+terraform apply
+# Now that the load-balancer is up, we update the cluster to integrate 
+kops update cluster my.cluster --target=terraform --out=$OUTPUT_DIR
+terraform apply -replace="scaleway_instance_server.control-plane-fr-par-2-0" -replace="scaleway_instance_server.nodes-fr-par-2-0"
+
+```
+
+
+

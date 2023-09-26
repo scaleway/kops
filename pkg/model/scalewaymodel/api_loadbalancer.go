@@ -86,6 +86,13 @@ func (b *APILoadBalancerModelBuilder) Build(c *fi.CloudupModelBuilderContext) er
 	lbFrontendHttps.Lifecycle = b.Lifecycle
 	c.AddTask(lbFrontendHttps)
 
+	//if b.Cluster.Spec.NetworkID != "" {
+	//	loadBalancer.VPCId = fi.PtrTo(b.Cluster.Spec.NetworkID)
+	//} else if b.Cluster.Spec.NetworkCIDR != "" {
+	//	loadBalancer.VPCName = fi.PtrTo(b.ClusterName())
+	//	loadBalancer.NetworkCIDR = fi.PtrTo(b.Cluster.Spec.NetworkCIDR)
+	//}
+
 	if dns.IsGossipClusterName(b.Cluster.Name) || b.Cluster.UsesPrivateDNS() || b.Cluster.UsesNoneDNS() {
 		// Ensure the LB hostname is included in the TLS certificate,
 		// if we're not going to use an alias for it
@@ -109,7 +116,7 @@ func createLbBackendAndFrontend(name string, port int, zone scw.Zone, loadBalanc
 		ForwardPort:          fi.PtrTo(int32(port)),
 		ForwardPortAlgorithm: fi.PtrTo(string(lb.ForwardPortAlgorithmRoundrobin)),
 		StickySessions:       fi.PtrTo(string(lb.StickySessionsTypeNone)),
-		ProxyProtocol:        fi.PtrTo(string(lb.ProxyProtocolProxyProtocolUnknown)),
+		ProxyProtocol:        fi.PtrTo(string(lb.ProxyProtocolProxyProtocolNone)),
 		LoadBalancer:         loadBalancer,
 	}
 
