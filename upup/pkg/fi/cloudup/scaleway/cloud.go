@@ -24,6 +24,7 @@ import (
 	domain "github.com/scaleway/scaleway-sdk-go/api/domain/v2beta1"
 	iam "github.com/scaleway/scaleway-sdk-go/api/iam/v1alpha1"
 	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
+	ipam "github.com/scaleway/scaleway-sdk-go/api/ipam/v1alpha1"
 	"github.com/scaleway/scaleway-sdk-go/api/lb/v1"
 	"github.com/scaleway/scaleway-sdk-go/api/marketplace/v2"
 	"github.com/scaleway/scaleway-sdk-go/api/vpc/v1"
@@ -64,6 +65,7 @@ type ScwCloud interface {
 	GatewayService() *vpcgw.API
 	IamService() *iam.API
 	InstanceService() *instance.API
+	IPAMService() *ipam.API
 	LBService() *lb.ZonedAPI
 	MarketplaceService() *marketplace.API
 	VPCService() *vpc.API
@@ -110,6 +112,7 @@ type scwCloudImplementation struct {
 	gatewayAPI     *vpcgw.API
 	iamAPI         *iam.API
 	instanceAPI    *instance.API
+	ipamAPI        *ipam.API
 	lbAPI          *lb.ZonedAPI
 	marketplaceAPI *marketplace.API
 	vpcAPI         *vpc.API
@@ -119,17 +122,11 @@ type scwCloudImplementation struct {
 // SCW_ACCESS_KEY, SCW_SECRET_KEY and SCW_DEFAULT_PROJECT_ID
 func NewScwCloud(tags map[string]string) (ScwCloud, error) {
 	//displayEnv()
-
-	region, err := scw.ParseRegion(tags["region"])
-	if err != nil {
-		return nil, err
-	}
-	zone, err := scw.ParseZone(tags["zone"])
-	if err != nil {
-		return nil, err
-	}
-
 	var scwClient *scw.Client
+	var region scw.Region
+	var zone scw.Zone
+	var err error
+
 	if profileName := os.Getenv("SCW_PROFILE"); profileName == "REDACTED" {
 		// If the profile is REDACTED, we're running integration tests so no need for authentication
 		scwClient, err = scw.NewClient(scw.WithoutAuth())
@@ -148,6 +145,19 @@ func NewScwCloud(tags map[string]string) (ScwCloud, error) {
 		if err != nil {
 			return nil, fmt.Errorf("creating client for Scaleway Cloud: %w", err)
 		}
+		region = scw.Region(fi.ValueOf(profile.DefaultRegion))
+		zone = scw.Zone(fi.ValueOf(profile.DefaultZone))
+	}
+
+	if tags != nil {
+		region, err = scw.ParseRegion(tags["region"])
+		if err != nil {
+			return nil, err
+		}
+		zone, err = scw.ParseZone(tags["zone"])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &scwCloudImplementation{
@@ -160,6 +170,7 @@ func NewScwCloud(tags map[string]string) (ScwCloud, error) {
 		gatewayAPI:     vpcgw.NewAPI(scwClient),
 		iamAPI:         iam.NewAPI(scwClient),
 		instanceAPI:    instance.NewAPI(scwClient),
+		ipamAPI:        ipam.NewAPI(scwClient),
 		lbAPI:          lb.NewZonedAPI(scwClient),
 		marketplaceAPI: marketplace.NewAPI(scwClient),
 		vpcAPI:         vpc.NewAPI(scwClient),
@@ -204,6 +215,10 @@ func (s *scwCloudImplementation) IamService() *iam.API {
 
 func (s *scwCloudImplementation) InstanceService() *instance.API {
 	return s.instanceAPI
+}
+
+func (s *scwCloudImplementation) IPAMService() *ipam.API {
+	return s.ipamAPI
 }
 
 func (s *scwCloudImplementation) LBService() *lb.ZonedAPI {
@@ -275,6 +290,7 @@ func (s *scwCloudImplementation) DeregisterInstance(i *cloudinstances.CloudInsta
 		}
 		for _, backEnd := range backEnds.Backends {
 			for _, serverIP := range backEnd.Pool {
+				// TODO(Mia-Cross): replace PrivateIP by IPAM
 				if serverIP == fi.ValueOf(server.Server.PrivateIP) {
 					_, err := s.lbAPI.RemoveBackendServers(&lb.ZonedAPIRemoveBackendServersRequest{
 						Zone:      s.zone,
@@ -356,7 +372,7 @@ func (s *scwCloudImplementation) GetCloudGroups(cluster *kops.Cluster, instanceg
 			continue
 		}
 
-		groups[ig.Name], err = buildCloudGroup(ig, serverGroup, nodeMap)
+		groups[ig.Name], err = buildCloudGroup(s, ig, serverGroup, nodeMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build cloud group for instance group %q: %w", ig.Name, err)
 		}
@@ -380,7 +396,7 @@ func findServerGroups(s *scwCloudImplementation, clusterName string) (map[string
 	return serverGroups, nil
 }
 
-func buildCloudGroup(ig *kops.InstanceGroup, sg []*instance.Server, nodeMap map[string]*v1.Node) (*cloudinstances.CloudInstanceGroup, error) {
+func buildCloudGroup(s *scwCloudImplementation, ig *kops.InstanceGroup, sg []*instance.Server, nodeMap map[string]*v1.Node) (*cloudinstances.CloudInstanceGroup, error) {
 	cloudInstanceGroup := &cloudinstances.CloudInstanceGroup{
 		HumanName:     ig.Name,
 		InstanceGroup: ig,
@@ -404,9 +420,11 @@ func buildCloudGroup(ig *kops.InstanceGroup, sg []*instance.Server, nodeMap map[
 		cloudInstance.State = cloudinstances.State(server.State)
 		cloudInstance.MachineType = server.CommercialType
 		cloudInstance.Roles = append(cloudInstance.Roles, InstanceRoleFromTags(server.Tags))
-		if server.PrivateIP != nil {
-			cloudInstance.PrivateIP = *server.PrivateIP
+		ip, err := s.GetServerPrivateIP(server.Name, server.Zone)
+		if err != nil {
+			return nil, fmt.Errorf("getting server private IP: %w", err)
 		}
+		cloudInstance.PrivateIP = ip
 	}
 
 	return cloudInstanceGroup, nil

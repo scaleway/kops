@@ -19,7 +19,6 @@ package scaleway
 import (
 	"fmt"
 
-	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 	"k8s.io/klog/v2"
 	"k8s.io/kops/protokube/pkg/gossip"
@@ -43,27 +42,22 @@ func NewSeedProvider(scwClient *scw.Client, clusterName string) (*SeedProvider, 
 func (p *SeedProvider) GetSeeds() ([]string, error) {
 	var seeds []string
 
-	instanceAPI := instance.NewAPI(p.scwClient)
-	zone, ok := p.scwClient.GetDefaultZone()
-	if !ok {
-		return nil, fmt.Errorf("could not determine default region from client")
+	scwCloud, err := scaleway.NewScwCloud(nil)
+	if err != nil {
+
 	}
-	servers, err := instanceAPI.ListServers(&instance.ListServersRequest{
-		Zone: zone,
-		Tags: []string{fmt.Sprintf("%s=%s", scaleway.TagClusterName, p.tag)},
-	}, scw.WithAllPages())
+	servers, err := scwCloud.GetClusterServers(p.tag, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get matching servers: %s", err)
 	}
 
-	for _, server := range servers.Servers {
-		if server.PrivateIP == nil || *server.PrivateIP == "" {
-			klog.Warningf("failed to find private ip of the server %s(%s)", server.Name, server.ID)
-			continue
+	for _, server := range servers {
+		ip, err := scwCloud.GetServerPrivateIP(server.Name, server.Zone)
+		if err != nil {
+			return nil, fmt.Errorf("getting server private IP: %w", err)
 		}
-
-		klog.V(4).Infof("Appending gossip seed %s(%s): %q", server.Name, server.ID, *server.PrivateIP)
-		seeds = append(seeds, *server.PrivateIP)
+		klog.V(4).Infof("Appending gossip seed %s(%s): %q", server.Name, server.ID, ip)
+		seeds = append(seeds, ip)
 	}
 
 	klog.V(4).Infof("Get seeds function done now")
