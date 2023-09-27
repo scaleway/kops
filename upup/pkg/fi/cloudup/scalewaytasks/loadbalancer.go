@@ -33,63 +33,48 @@ import (
 
 // +kops:fitask
 type LoadBalancer struct {
-	Name      *string
-	Lifecycle fi.Lifecycle
+	ID   *string
+	Name *string
+	Zone *string
+	Tags []string
 
-	Zone                  *string
-	LBID                  *string
 	LBAddresses           []string
-	Tags                  []string
 	Description           string
 	SslCompatibilityLevel string
 	ForAPIServer          bool
 
-	VPCId *string // set if Cluster.Spec.NetworkID is
+	Lifecycle fi.Lifecycle
+	//DHCPConfig     *DHCPConfig
+	PrivateNetwork *PrivateNetwork
+	//VPCId       *string // set if Cluster.Spec.NetworkID is
 	//VPCName     *string // set if Cluster.Spec.NetworkCIDR is
 	//NetworkCIDR *string // set if Cluster.Spec.NetworkCIDR is
 }
 
+var _ fi.CloudupTask = &LoadBalancer{}
 var _ fi.CompareWithID = &LoadBalancer{}
+var _ fi.CloudupHasDependencies = &LoadBalancer{}
 var _ fi.HasAddress = &LoadBalancer{}
 
 func (l *LoadBalancer) CompareWithID() *string {
-	return l.LBID
+	return l.ID
+}
+
+func (l *LoadBalancer) GetDependencies(tasks map[string]fi.CloudupTask) []fi.CloudupTask {
+	var deps []fi.CloudupTask
+	for _, task := range tasks {
+		if _, ok := task.(*PrivateNetwork); ok {
+			deps = append(deps, task)
+		}
+		if _, ok := task.(*DHCPConfig); ok {
+			deps = append(deps, task)
+		}
+	}
+	return deps
 }
 
 func (l *LoadBalancer) IsForAPIServer() bool {
 	return l.ForAPIServer
-}
-
-func (l *LoadBalancer) Find(context *fi.CloudupContext) (*LoadBalancer, error) {
-	cloud := context.T.Cloud.(scaleway.ScwCloud)
-	lbService := cloud.LBService()
-
-	lbResponse, err := lbService.ListLBs(&lb.ZonedAPIListLBsRequest{
-		Zone: scw.Zone(cloud.Zone()),
-		Name: l.Name,
-	}, scw.WithAllPages())
-	if err != nil {
-		return nil, fmt.Errorf("getting load-balancer %s: %w", fi.ValueOf(l.LBID), err)
-	}
-	if lbResponse.TotalCount != 1 {
-		return nil, nil
-	}
-	loadBalancer := lbResponse.LBs[0]
-
-	lbIPs := []string(nil)
-	for _, IP := range loadBalancer.IP {
-		lbIPs = append(lbIPs, IP.IPAddress)
-	}
-
-	return &LoadBalancer{
-		Name:         fi.PtrTo(loadBalancer.Name),
-		LBID:         fi.PtrTo(loadBalancer.ID),
-		Zone:         fi.PtrTo(string(loadBalancer.Zone)),
-		LBAddresses:  lbIPs,
-		Tags:         loadBalancer.Tags,
-		Lifecycle:    l.Lifecycle,
-		ForAPIServer: l.ForAPIServer,
-	}, nil
 }
 
 func (l *LoadBalancer) FindAddresses(context *fi.CloudupContext) ([]string, error) {
@@ -119,6 +104,38 @@ func (l *LoadBalancer) FindAddresses(context *fi.CloudupContext) ([]string, erro
 	return addresses, nil
 }
 
+func (l *LoadBalancer) Find(context *fi.CloudupContext) (*LoadBalancer, error) {
+	cloud := context.T.Cloud.(scaleway.ScwCloud)
+	lbService := cloud.LBService()
+
+	lbResponse, err := lbService.ListLBs(&lb.ZonedAPIListLBsRequest{
+		Zone: scw.Zone(cloud.Zone()),
+		Name: l.Name,
+	}, scw.WithAllPages())
+	if err != nil {
+		return nil, fmt.Errorf("getting load-balancer %s: %w", fi.ValueOf(l.ID), err)
+	}
+	if lbResponse.TotalCount != 1 {
+		return nil, nil
+	}
+	loadBalancer := lbResponse.LBs[0]
+
+	lbIPs := []string(nil)
+	for _, IP := range loadBalancer.IP {
+		lbIPs = append(lbIPs, IP.IPAddress)
+	}
+
+	return &LoadBalancer{
+		Name:         fi.PtrTo(loadBalancer.Name),
+		ID:           fi.PtrTo(loadBalancer.ID),
+		Zone:         fi.PtrTo(string(loadBalancer.Zone)),
+		LBAddresses:  lbIPs,
+		Tags:         loadBalancer.Tags,
+		Lifecycle:    l.Lifecycle,
+		ForAPIServer: l.ForAPIServer,
+	}, nil
+}
+
 func (l *LoadBalancer) Run(context *fi.CloudupContext) error {
 	return fi.CloudupDefaultDeltaRunMethod(l, context)
 }
@@ -128,7 +145,7 @@ func (_ *LoadBalancer) CheckChanges(actual, expected, changes *LoadBalancer) err
 		if changes.Name != nil {
 			return fi.CannotChangeField("Name")
 		}
-		if changes.LBID != nil {
+		if changes.ID != nil {
 			return fi.CannotChangeField("ID")
 		}
 		if changes.Zone != nil {
@@ -156,7 +173,7 @@ func (l *LoadBalancer) RenderScw(t *scaleway.ScwAPITarget, actual, expected, cha
 		if changes != nil || len(actual.Tags) != len(expected.Tags) {
 			_, err := lbService.UpdateLB(&lb.ZonedAPIUpdateLBRequest{
 				Zone:                  scw.Zone(fi.ValueOf(actual.Zone)),
-				LBID:                  fi.ValueOf(actual.LBID),
+				LBID:                  fi.ValueOf(actual.ID),
 				Name:                  fi.ValueOf(actual.Name),
 				Description:           expected.Description,
 				SslCompatibilityLevel: lb.SSLCompatibilityLevel(expected.SslCompatibilityLevel),
@@ -167,15 +184,16 @@ func (l *LoadBalancer) RenderScw(t *scaleway.ScwAPITarget, actual, expected, cha
 			}
 		}
 
-		expected.LBID = actual.LBID
+		expected.ID = actual.ID
 		expected.LBAddresses = actual.LBAddresses
 
 	} else {
 
 		klog.Infof("Creating new load-balancer with name %q", fi.ValueOf(expected.Name))
+		zone := scw.Zone(fi.ValueOf(expected.Zone))
 
 		lbCreated, err := lbService.CreateLB(&lb.ZonedAPICreateLBRequest{
-			Zone: scw.Zone(fi.ValueOf(expected.Zone)),
+			Zone: zone,
 			Name: fi.ValueOf(expected.Name),
 			Tags: expected.Tags,
 		})
@@ -185,7 +203,7 @@ func (l *LoadBalancer) RenderScw(t *scaleway.ScwAPITarget, actual, expected, cha
 
 		_, err = lbService.WaitForLb(&lb.ZonedAPIWaitForLBRequest{
 			LBID: lbCreated.ID,
-			Zone: scw.Zone(fi.ValueOf(expected.Zone)),
+			Zone: zone,
 		})
 		if err != nil {
 			return fmt.Errorf("waiting for load-balancer %s: %w", lbCreated.ID, err)
@@ -195,7 +213,7 @@ func (l *LoadBalancer) RenderScw(t *scaleway.ScwAPITarget, actual, expected, cha
 		for _, ip := range lbCreated.IP {
 			lbIPs = append(lbIPs, ip.IPAddress)
 		}
-		expected.LBID = &lbCreated.ID
+		expected.ID = &lbCreated.ID
 		expected.LBAddresses = lbIPs
 
 	}
