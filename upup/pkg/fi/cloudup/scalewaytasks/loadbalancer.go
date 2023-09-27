@@ -209,6 +209,16 @@ func (l *LoadBalancer) RenderScw(t *scaleway.ScwAPITarget, actual, expected, cha
 			return fmt.Errorf("waiting for load-balancer %s: %w", lbCreated.ID, err)
 		}
 
+		_, err = lbService.AttachPrivateNetwork(&lb.ZonedAPIAttachPrivateNetworkRequest{
+			Zone:             zone,
+			LBID:             lbCreated.ID,
+			PrivateNetworkID: fi.ValueOf(expected.PrivateNetwork.ID),
+			//DHCPConfig:       expected.DHCPConfig.,
+		})
+		if err != nil {
+			return fmt.Errorf("attaching load-balancer to private network: %w")
+		}
+
 		lbIPs := []string(nil)
 		for _, ip := range lbCreated.IP {
 			lbIPs = append(lbIPs, ip.IPAddress)

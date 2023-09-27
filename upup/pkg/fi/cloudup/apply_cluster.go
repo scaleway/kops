@@ -690,7 +690,8 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) error {
 				KopsModelContext: modelContext,
 			}
 			l.Builders = append(l.Builders,
-				//&scalewaymodel.NetworkModelBuilder{ScwModelContext: scwModelContext, Lifecycle: networkLifecycle},
+				//TODO(Mia-Cross): add the newly created models and tasks
+				&scalewaymodel.NetworkModelBuilder{ScwModelContext: scwModelContext, Lifecycle: networkLifecycle},
 				&scalewaymodel.APILoadBalancerModelBuilder{ScwModelContext: scwModelContext, Lifecycle: clusterLifecycle},
 				&scalewaymodel.InstanceModelBuilder{ScwModelContext: scwModelContext, BootstrapScriptBuilder: bootstrapScriptBuilder, Lifecycle: clusterLifecycle},
 				&scalewaymodel.SSHKeyModelBuilder{ScwModelContext: scwModelContext, Lifecycle: securityLifecycle},
