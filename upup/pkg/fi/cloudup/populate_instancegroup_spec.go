@@ -41,7 +41,7 @@ const (
 	defaultNodeMachineTypeDO       = "s-2vcpu-4gb"
 	defaultNodeMachineTypeAzure    = "Standard_B2s"
 	defaultNodeMachineTypeHetzner  = "cx21"
-	defaultNodeMachineTypeScaleway = "DEV1-M"
+	defaultNodeMachineTypeScaleway = "PLAY2-NANO"
 
 	defaultBastionMachineTypeGCE     = "e2-micro"
 	defaultBastionMachineTypeAzure   = "Standard_B2s"
@@ -51,7 +51,7 @@ const (
 	defaultMasterMachineTypeDO       = "s-2vcpu-4gb"
 	defaultMasterMachineTypeAzure    = "Standard_B2s"
 	defaultMasterMachineTypeHetzner  = "cx21"
-	defaultMasterMachineTypeScaleway = "DEV1-M"
+	defaultMasterMachineTypeScaleway = "PLAY2-NANO"
 
 	defaultDOImageFocal       = "ubuntu-20-04-x64"
 	defaultHetznerImageFocal  = "ubuntu-20.04"
@@ -372,9 +372,15 @@ func defaultMachineType(cloud fi.Cloud, cluster *kops.Cluster, ig *kops.Instance
 	case kops.CloudProviderScaleway:
 		switch ig.Spec.Role {
 		case kops.InstanceGroupRoleControlPlane:
+			if ig.Spec.Subnets[0] == "fr-par-3" {
+				return "PRO2-XS", nil
+			}
 			return defaultMasterMachineTypeScaleway, nil
 
 		case kops.InstanceGroupRoleNode:
+			if ig.Spec.Subnets[0] == "fr-par-3" {
+				return "PRO2-S", nil
+			}
 			return defaultNodeMachineTypeScaleway, nil
 		}
 	}

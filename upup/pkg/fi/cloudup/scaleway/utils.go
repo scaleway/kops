@@ -45,8 +45,8 @@ func isHTTPCodeError(err error, statusCode int) bool {
 	return false
 }
 
-// is404Error returns true if err is an HTTP 404 error
-func is404Error(err error) bool {
+// Is404Error returns true if err is an HTTP 404 error
+func Is404Error(err error) bool {
 	notFoundError := &scw.ResourceNotFoundError{}
 	return isHTTPCodeError(err, http.StatusNotFound) || errors.As(err, &notFoundError)
 }
@@ -136,7 +136,7 @@ func CreateValidScalewayProfile() (*scw.Profile, error) {
 		return &profile, nil
 	}
 
-	// We load the credentials form the profile first
+	// We load the credentials from the profile first
 	profileFromScwConfig, err := getScalewayProfile()
 	if err != nil {
 		return nil, err
@@ -170,6 +170,13 @@ func CreateValidScalewayProfile() (*scw.Profile, error) {
 		}
 		return nil, fmt.Errorf(errMsg)
 	}
+
+	//fmt.Printf("******************* Scaleway credentials *******************\n\n")
+	//
+	//fmt.Printf("SCW_PROFILE = %s\n", os.Getenv("SCW_PROFILE"))
+	//fmt.Printf("SCW_ACCESS_KEY = %s\n", *profile.AccessKey)
+	//fmt.Printf("SCW_SECRET_KEY = %s\n", *profile.SecretKey)
+	//fmt.Printf("SCW_DEFAULT_PROJECT_ID = %s\n", *profile.DefaultProjectID)
 
 	return &profile, nil
 }
@@ -213,4 +220,37 @@ func GetIPAMPublicIP(ipamAPI *ipam.API, serverID string, zone scw.Zone) (string,
 	}
 
 	return ips.IPs[0].Address.IP.String(), nil
+}
+
+func displayEnv() {
+	fmt.Printf("\n********************* S3 credentials *********************\n\n")
+
+	fmt.Printf(fmt.Sprintf("S3_REGION = %s\n", os.Getenv("S3_REGION")))
+	fmt.Printf(fmt.Sprintf("S3_ENDPOINT = %s\n", os.Getenv("S3_ENDPOINT")))
+	fmt.Printf(fmt.Sprintf("S3_ACCESS_KEY_ID = %s\n", os.Getenv("S3_ACCESS_KEY_ID")))
+	fmt.Printf(fmt.Sprintf("S3_SECRET_ACCESS_KEY = %s\n", os.Getenv("S3_SECRET_ACCESS_KEY")))
+
+	fmt.Printf("\n\t*********** State-store bucket *************\n\n")
+
+	fmt.Printf(fmt.Sprintf("KOPS_STATE_STORE = %s\n", os.Getenv("KOPS_STATE_STORE")))
+	fmt.Printf(fmt.Sprintf("S3_BUCKET_NAME = %s\n", os.Getenv("S3_BUCKET_NAME")))
+
+	fmt.Printf("\n\t*********** State-store bucket *************\n\n")
+
+	fmt.Printf(fmt.Sprintf("NODEUP_BUCKET = %s\n", os.Getenv("NODEUP_BUCKET")))
+	fmt.Printf(fmt.Sprintf("UPLOAD_DEST = %s\n", os.Getenv("UPLOAD_DEST")))
+	fmt.Printf(fmt.Sprintf("KOPS_BASE_URL = %s\n", os.Getenv("KOPS_BASE_URL")))
+	fmt.Printf(fmt.Sprintf("KOPSCONTROLLER_IMAGE = %s\n", os.Getenv("KOPSCONTROLLER_IMAGE")))
+	fmt.Printf(fmt.Sprintf("DNSCONTROLLER_IMAGE = %s\n", os.Getenv("DNSCONTROLLER_IMAGE")))
+
+	fmt.Printf("\n********************* Registry access *********************\n\n")
+
+	fmt.Printf(fmt.Sprintf("DOCKER_REGISTRY = %s\n", os.Getenv("DOCKER_REGISTRY")))
+	fmt.Printf(fmt.Sprintf("DOCKER_IMAGE_PREFIX = %s\n", os.Getenv("DOCKER_IMAGE_PREFIX")))
+
+	fmt.Printf("\n********************* Other *********************\n\n")
+
+	fmt.Printf(fmt.Sprintf("KOPS_FEATURE_FLAGS = %s\n", os.Getenv("KOPS_FEATURE_FLAGS")))
+	fmt.Printf(fmt.Sprintf("KOPS_ARCH = %s\n", os.Getenv("KOPS_ARCH")))
+	fmt.Printf(fmt.Sprintf("KOPS_VERSION = %s\n\n", os.Getenv("KOPS_VERSION")))
 }
