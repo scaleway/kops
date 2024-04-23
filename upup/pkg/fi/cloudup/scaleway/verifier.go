@@ -25,8 +25,9 @@ import (
 	"strings"
 
 	"github.com/scaleway/scaleway-sdk-go/api/instance/v1"
-	ipam "github.com/scaleway/scaleway-sdk-go/api/ipam/v1alpha1"
+	"github.com/scaleway/scaleway-sdk-go/api/ipam/v1"
 	"github.com/scaleway/scaleway-sdk-go/scw"
+	"k8s.io/klog/v2"
 	kopsv "k8s.io/kops"
 	"k8s.io/kops/pkg/bootstrap"
 	"k8s.io/kops/pkg/wellknownports"
@@ -91,19 +92,25 @@ func (v scalewayVerifier) VerifyToken(ctx context.Context, rawRequest *http.Requ
 	}
 
 	serverResponse, err := instance.NewAPI(scwClient).GetServer(&instance.GetServerRequest{
-		ServerID: serverID,
 		Zone:     zone,
+		ServerID: serverID,
 	}, scw.WithContext(ctx))
-	if err != nil || serverResponse == nil || serverResponse.Server == nil {
-		return nil, fmt.Errorf("failed to get server %s: %w", serverID, err)
+	if err != nil {
+		return nil, err
 	}
 	server := serverResponse.Server
+	if len(server.PrivateNics) < 0 {
+		return nil, fmt.Errorf("could not find any private NIC for server %q", server.Name)
+	}
 
 	ips, err := ipam.NewAPI(scwClient).ListIPs(&ipam.ListIPsRequest{
-		Region:     region,
-		ResourceID: fi.PtrTo(server.ID),
-		IsIPv6:     fi.PtrTo(false),
-		Zonal:      fi.PtrTo(zone.String()),
+		Region:           region,
+		PrivateNetworkID: fi.PtrTo(server.PrivateNics[0].PrivateNetworkID),
+		//	ResourceID: fi.PtrTo(server.ID),
+		ResourceID: fi.PtrTo(server.PrivateNics[0].ID),
+		//ResourceName: fi.PtrTo(serverName),
+		IsIPv6: fi.PtrTo(false),
+		//	Zonal:      fi.PtrTo(zone.String()),
 	}, scw.WithContext(ctx), scw.WithAllPages())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IP for server %q: %w", server.Name, err)
@@ -118,12 +125,15 @@ func (v scalewayVerifier) VerifyToken(ctx context.Context, rawRequest *http.Requ
 		addresses = append(addresses, ip.Address.IP.String())
 		challengeEndPoints = append(challengeEndPoints, net.JoinHostPort(ip.Address.IP.String(), strconv.Itoa(wellknownports.NodeupChallenge)))
 	}
+	klog.Infof("Challenge endpoints = %#+v", challengeEndPoints)
 
 	result := &bootstrap.VerifyResult{
 		NodeName:          server.Name,
 		InstanceGroupName: InstanceGroupNameFromTags(server.Tags),
 		CertificateNames:  addresses,
-		ChallengeEndpoint: challengeEndPoints[0],
+	}
+	if len(challengeEndPoints) < 1 {
+		result.ChallengeEndpoint = challengeEndPoints[0]
 	}
 
 	return result, nil
